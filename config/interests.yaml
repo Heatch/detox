@@ -1,0 +1,125 @@
+# Detox — what you care about.
+# The preference file. Read on every pipeline run; validated with zod at load.
+# Rule scoring, query building, and relevance checks all read from here.
+
+topics:
+  tech:
+    keywords: [databases, compilers, distributed systems, developer tools, open source, AI]
+    entities: [Postgres, Rust, SQLite, Linux]
+    weight: 1.0
+  science:
+    keywords: [physics, biology, neuroscience, climate, replication, peer review]
+    entities: []
+    weight: 1.0
+  math:
+    keywords: [proof, conjecture, number theory, combinatorics, prime]
+    entities: []
+    weight: 1.0
+  infrastructure:
+    keywords: [tunnel boring, high-speed rail, gigafactory, grid interconnect, subway expansion, port expansion]
+    entities: [Ontario Line, Crossrail, Brightline]
+    weight: 1.2
+  canada-gta:
+    keywords: [Toronto, Ontario, GTA, Metrolinx, TTC, housing, transit]
+    entities: [Doug Ford, Olivia Chow]
+    weight: 1.0
+  spaceflight:
+    keywords: [launch, orbital, rocket, crew, satellite, lunar]
+    entities: [SpaceX, ESA, NASA, Roscosmos]
+    weight: 1.0
+
+# One-liner curation budget per lane: [min, max]. Design constraint, not a default.
+lane_budget: [3, 5]
+
+sports:
+  # The "add a team" surface. Flipping `enabled` is all that's needed —
+  # the ESPN endpoint shape is identical across leagues (experiment 009).
+  teams:
+    - { id: raptors,  name: Toronto Raptors,   sport: basketball, league: nba,  abbr: tor, enabled: true }
+    - { id: bluejays, name: Toronto Blue Jays, sport: baseball,   league: mlb,  abbr: tor, enabled: false }
+    - { id: leafs,    name: Toronto Maple Leafs, sport: hockey,   league: nhl,  abbr: tor, enabled: false }
+    - { id: tempo,    name: Toronto Tempo,     sport: basketball, league: wnba, abbr: tor, enabled: false }
+  upcoming_games: 5               # games shown per team block
+  show_preseason: label           # label | hide | show
+
+watchlist:
+  shows: [The Long Corridor]
+  movies: [Salt Flats]
+
+music:
+  use_spotify_top_artists: true   # artist set only; release calendar is MusicBrainz (experiment 004)
+  top_n: 25
+  time_range: short_term          # approx. last 4 weeks
+  artists: [Halcyon Fields]       # manual supplement Spotify's ranking misses
+  show_reissues: true             # kind-tagged; the set is catalog-heavy (Beatles, Bowie)
+
+movies:
+  window_days: 60
+  language: en                        # with_original_language filter for tier 2
+  people:                             # actor watchlist — tier 1, always shows (no filters)
+    - Cillian Murphy                  # example names; replace with your list
+    - Zendaya
+  budget_min_m: 20                    # USD millions; benchmark, not a hard requirement
+  bigness_fallback: major_studios     # used when a film's budget is unknown (most of them)
+  major_studios:                      # names; resolved to company IDs and cached
+    - Blumhouse Productions
+    - Legendary Pictures
+    - DC Studios
+    - Universal Pictures
+    - Warner Bros. Pictures
+    - Paramount Pictures
+    - Walt Disney Pictures
+    - Sony Pictures
+    - Lionsgate
+    - A24
+    - Neon
+    - 20th Century Studios
+
+tv:
+  seen_shows:                       # every show you've watched — drives new-season alerts AND the taste profile
+    - Severance                     # example names; replace with your list
+    - The Bear
+    - Wednesday
+    - The Last of Us
+    - Slow Horses
+  window_days: 60
+  language: en
+  new_shows:                        # shows NOT in seen_shows — gated
+    popularity_min: 15              # TV scale (max 20.3 observed) — "very anticipated" bypass
+    confidence_min: 0.75            # taste score threshold (rules + LLM, experiment 011)
+    scoring: llm                    # off | rules-only | llm (rules-only = degraded path)
+
+games:
+  steam_username: Bitesh9            # configurable; resolved to steamid64 once and cached
+  country: CA
+  currency: CAD
+  deals_only: true                   # ITAD deals=true — only show discounted games
+
+concerts:
+  enabled: true
+  city: Toronto
+  radius_km: 50
+  window_days: 60
+
+reddit:
+  subreddits: [nba, torontoraptors, uwaterloo]   # exact subs, any number
+  top_n: 5                        # posts per subreddit
+  top_comments_n: 3               # top-level comments fetched per kept post
+  time_window: day                # day | week | month | all
+  exclude_title_patterns: ["game thread", "post game thread", "daily discussion"]
+
+holdings: config/holdings.md
+
+weather:
+  locations:                       # pill toggle order in the weather block
+    - { id: waterloo, name: Waterloo, lat: 43.4643, lon: -80.5204, ec_station: on-82 }
+    - { id: vaughan,  name: Vaughan,  lat: 43.8372, lon: -79.5083, ec_station: on-64 }
+    - { id: toronto,  name: Toronto,  lat: 43.6532, lon: -79.3832, ec_station: on-143 }
+  default_location: toronto
+  day_parts:                        # local hours
+    morning: [6, 12]
+    afternoon: [12, 18]
+    evening: [18, 22]
+    night: [22, 6]
+
+negative: [crypto prices, celebrity]

@@ -1,0 +1,25 @@
+# Detox — runtime settings. Lanes, budgets, caps, timezone.
+
+timezone: America/Toronto
+
+refresh:
+  on_open_stale_after_hours: 24   # open the dashboard -> refresh if older than this
+  daily_at: "09:00"               # scheduled run while the daemon is up
+  skip_if_run_within_hours: 3     # guard against double runs
+
+windows:
+  news_lookback_hours: 24
+  entertainment_lookahead_days: 60
+  sports_lookahead_days: 14
+  sports_lookback_days: 3
+  holdings_earnings_lookahead_days: 30
+  holdings_results_lookback_days: 7
+  concerts_lookahead_days: 60
+
+llm:
+  daily_cap_usd: 0.05             # budget guard; over cap -> rules-only degradation
+  batch_max_items: 60             # items per call (both models have ~1M context)
+
+audit:
+  keep_days: 30                   # rolling window for cut items / run history
+

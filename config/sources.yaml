@@ -1,0 +1,217 @@
+# Detox — sources: feeds, endpoints, tier weights, rate limits.
+# One entry per source family. Adapters read this; nothing is hardcoded.
+
+newsflash:
+  key_env: NEWSFLASH_API_KEY
+  base: https://newsflash.sh/api
+  defaults: { relevance_floor: 0.35, langs: [en], min_sources: 2, window_hours: 24 }
+  lanes:
+    tech:           { category: tech }
+    science:        { category: science }
+    math:            { q: "mathematics proof conjecture", semantic: 1 }   # corpus is thin here
+    infrastructure: { q: "major infrastructure project construction", semantic: 1 }
+    canada-gta:     { q: "Canada Toronto Ontario", semantic: 1 }
+    # spaceflight is NOT here — its own sources, see `spaceflight` below (experiment 007)
+  # Experiment 001: dedupe/corroboration/summaries come free; adapter cleanup
+  # pass = English filter, entity decoding, null-summary fallback, sort by
+  # confidence + recency. Not used for music (experiment 004).
+
+spaceflight:
+  news:
+    provider: spaceflight-news-api
+    base: https://api.spaceflightnewsapi.net/v4       # NOT spaceflightnewsapi.net/api/v4 (404s)
+    endpoints: { articles: /articles, blogs: /blogs, reports: /reports, info: /info }
+    query: { ordering: -published_at, news_sites: [Spaceflight Now, SpaceNews, NASA, Arstechnica], search_from: interests.spaceflight }
+    key: none
+  launches:
+    provider: launch-library-2
+    base: https://ll.thespacedevs.com/2.2.0
+    endpoint: /launch/upcoming/?limit=N&ordering=net
+    key: none                      # guest; free token raises rate limit if needed
+    show: [net, window, status, mission, pad, location, provider, webcast_live, probability, weather_concerns]
+    upcoming_only: true
+  # Experiment 007: both validated keyless 2026-09-30.
+
+rss_gapfillers:
+  math:       [arxiv-math, quanta, ams-notices]
+  tech-dev:   [hacker-news-algolia, lobsters]
+  canada-gta: [cbc-toronto, toronto-star, globe-and-mail, blogto, metrolinx-notices]
+  spaceflight: [nasa-news, spaceflight-now]
+  # Promote per-lane if Newsflash coverage proves thin (experiment 001).
+
+weather:
+  sources:
+    - id: envcan
+      name: "Environment Canada"
+      kind: gc-citypage
+      endpoint: "https://api.weather.gc.ca/collections/citypageweather-realtime/items/{ec_station}"
+      key: none
+      fields: { temp: "hourly temperature", precip: "hourly lop (%, + category)", wind: "hourly wind.speed km/h + wind.direction", humidity: "period relativeHumidity + currentConditions (no hourly)" }
+      quirks: "values are {en, fr} nested; hourly window runs from the current hour forward; 13 day/night periods ≈ 6.5 days; textSummary per period is a ready-made plain-language line"
+    - id: openmeteo
+      name: "Open-Meteo"
+      kind: open-meteo
+      endpoint: "https://api.open-meteo.com/v1/forecast"
+      key: none
+      fields: { temp: "temperature_2m", precip: "precipitation (mm) + precipitation_probability (%)", wind: "wind_speed_10m, wind_gusts_10m, wind_direction_10m", humidity: "relative_humidity_2m" }
+      quirks: "cleanest payload; 168 hourly + 7 daily; includes past hours of today"
+    - id: metno
+      name: "MET Norway"
+      kind: met-no
+      endpoint: "https://api.met.no/weatherapi/locationforecast/2.0/compact"
+      key: none
+      user_agent: required
+      fields: { temp: "instant details air_temperature", precip: "next_1_hours/next_6_hours precipitation_amount (mm)", wind: "instant wind_speed + wind_from_direction", humidity: "instant relative_humidity" }
+      quirks: "hourly ~59h then 6-hourly to ~9 days; pop field optional/absent; no gusts in instant details; TLS fails under Python cert store on this host — use curl or a pinned CA"
+  consensus: median
+  spread_note: { temp_c: 3, precip_prob_points: 25 }   # thresholds for the disagreement note
+  # Experiment 006: all three validated keyless, 2026-09-30.
+
+music:
+  artist_set: { provider: spotify, key_env: SPOTIFY_CLIENT_ID, top_n: 25, time_range: short_term }
+  release_calendar:
+    provider: musicbrainz
+    base: https://musicbrainz.org/ws/2
+    query: "release-level: arid:<mbid> AND date:[today-30d .. today+60d]"
+    filters: { status: Official, dedupe: release-group, show_kinds: [album, single, deluxe, reissue, soundtrack] }
+    rate_limit: { requests_per_second: 1, retry_on: [503], user_agent: "DetoxDashboard/0.1" }
+    # Experiment 004: MusicBrainz alone. Editor lag after announcements is the
+    # accepted gap (U2 case). Spotify catalog scanning is retired.
+
+concerts:
+  provider: ticketmaster
+  key_env: TICKETMASTER_KEY
+  query: { method: city-wide-pull + attraction-name-match, classification: music, city: Toronto, radius_km: 50 }
+  # Experiment 003: per-artist keyword search is a proven trap (Drake: 31 hits,
+  # 0 real). Normalize attraction names (NFKD, fold case/punctuation).
+
+reddit:
+  key_env: REDDIT_CLIENT_ID
+  auth: client-credentials        # app-only; public listings are readable
+  sort: top
+  # Experiment 005.
+
+games:
+  wishlist:
+    resolve: "https://steamcommunity.com/id/{steam_username}?xml=1"   # -> steamid64 (cache forever)
+    list: "https://api.steampowered.com/IWishlistService/GetWishlist/v1/?steamid={id}"
+    key: none
+    returns: "[{appid, priority, date_added}]  (priority = user's manual ordering — sort key)"
+  identity:
+    endpoint: "https://store.steampowered.com/api/appdetails?appids={appid}&cc=ca&l=en"
+    key: none
+    returns: "name, release_date, price_overview{final,initial,discount_percent}"
+  prices:
+    provider: isthereanydeal
+    base: https://api.isthereanydeal.com
+    key_env: ITAD_KEY                 # the API KEY — NOT the OAuth client pair (those are for
+                                      # user-scope endpoints; tested and rejected as apikey:
+                                      # "Invalid or expired api key"). Verified live 2026-09-30.
+    lookup:
+      - { path: /lookup/id/shop/61/v1, method: POST, use: "appid -> ITAD uuid (shop 61 = Steam); KEYLESS (verified)", body: '["app/526870", ...]' }
+    endpoints:
+      - { path: /games/prices/v3,    method: POST, use: "per-shop deals: price, regular, cut (% off), storeLow, expiry; body = plain ITAD uuid array (NOT steam/app/...)" }
+      - { path: /games/overview/v2,  method: POST, use: "current best price among ALL covered shops + historyLow (all/y1/m3)" }
+      - { path: /games/info/v2,      method: GET,  use: "game info" }
+      - { path: /service/shops/v1,   method: GET,  use: "shop ID -> display name (keyless)" }
+    sale_semantics: "universal lowest — row = min(deals[].price) across all shops, shown with the winning shop.name; old = that shop's regular; off = cut"
+    params: { country: CA, currency: CAD, deals: true }
+    dead_paths: ["/game/plain/v2", "/search/v1", "/service/game/v1", "/games/lookup/v1 (keyed-only; use the keyless bulk lookup above)"]
+  fallback: "ITAD unkeyed/unreachable -> Steam-only sale view via appdetails (says so in the lane)"
+  # Experiment 012: wishlist chain validated keyless 2026-09-30; ITAD surface
+  # mapped via auth-layer probing; prices/v3 response schema re-verify pending key.
+
+holdings:
+  file: config/holdings.md
+  provider: yahoo-finance                # single source: news + earnings (experiment 008)
+  news:
+    endpoint: "https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}&region=US&lang=en-US"
+    key: none
+    per_symbol: true                     # batched RSS works but is lossy (no symbol attribution)
+    filter: { exclude: [promo, opinion] }  # rule cuts: domain blocklist + title heuristics
+  earnings:
+    endpoint: "https://query1.finance.yahoo.com/v10/finance/quoteSummary/{symbol}?modules=calendarEvents,earnings"
+    via: yahoo-finance2                  # automates the cookie+crumb handshake; no key
+    window_days: 30
+    fields: [earningsDate, isEarningsDateEstimate, earningsAverage, reportedDate, actual, estimate, surprisePct, financialCurrency]
+  symbol_resolution:
+    tsx: "append .TO"                    # TSX:APTX -> APTX.TO
+    class_share: "dot to dash, then .TO" # TSX:HMM.A -> HMM-A.TO (HMM.A.TO 404s)
+    bare: "as-is, US first"
+    exclude_instruments: [ETF]           # CBIL, XEN, NLR: no news or earnings fetched
+    currency: "label per item (financialCurrency: CAD/USD/DKK vary)"
+  cdr_map:                               # NEO CDR -> underlying company symbol
+    NEO:BLK: BLK
+    NEO:COST: COST
+    NEO:GOOG: GOOG
+    NEO:MCD: MCD
+    NEO:NVDA: NVDA
+    NEO:NVON: NVO                        # NOT NVON — the trap; prefix-stripping 404s
+    NEO:WMT: WMT
+  # Experiment 008: fully Yahoo, validated 2026-09-30 on all 25 symbols.
+  # Fallbacks if Yahoo degrades: Finnhub, SEC EDGAR (US), wire RSS.
+
+sports:
+  provider: espn-site-api
+  base: https://site.api.espn.com/apis/site/v2/sports
+  endpoints:
+    schedule: "{sport}/{league}/teams/{abbr}/schedule"
+    injuries: "{sport}/{league}/injuries"        # league-wide; filter group by team displayName
+  user_agent: "curl/8.4.0"        # CRITICAL: plain-library UA only — ESPN's WAF 403s
+                                  # custom and browser UAs, and 403s a missing UA
+  fields:
+    schedule: [date, name, competitors(homeAway,team), status.type+detail, venue, broadcasts, seasonType]
+    injuries: [athlete.displayName, status, date, shortComment/longComment, details(type,location,side,detail,returnDate), fantasyStatus.abbreviation]
+  quirks:
+    - "injury status vocabulary is league-specific (NBA Day-To-Day, MLB 15-Day-IL, NHL IR-LT, WNBA Out)"
+    - "details.type is not always an injury (Coach's Decision, Personal) — decide filter vs show"
+    - "shortComment sometimes junk ('ir-nr') — compose from details instead"
+    - "returnDate may be league padding (Tempo: all 2027-05-01)"
+    - "empty schedules are normal in offseason (Jays: 0 events) — render gracefully"
+  # Experiment 009: validated live across nba/mlb/nhl/wnba 2026-09-30.
+  # Fallbacks if ESPN breaks: nba_api (NBA), official NBA injury report PDF.
+
+entertainment_screen:
+  movies:
+    provider: tmdb
+    base: https://api.themoviedb.org/3
+    key_env: TMDB_API_KEY
+    attribution: "This product uses the TMDB API but is not endorsed or certified by TMDB."
+    tiers:
+      watchlist: "discover/movie?with_people=<id1|id2|...> (pipe=OR) over the window; no language/budget filter — always shows"
+      others: "discover/movie?with_original_language=en over the window; big enough = budget >= budget_min_m when known, else production_company in major_studios"
+    fields: [title, release_date, popularity, budget (details only), production_companies (details only)]
+    people_lookup: "/search/person (resolve once, cache IDs)"
+    quirks:
+      - "budget is 0/unknown for most upcoming films (3/12 in sample) — the studio fallback is what makes tier 2 work"
+      - "popularity spikes near release — order by it, never threshold on it"
+      - "vote_count is 0 for unreleased films — useless pre-release"
+      - "with_release_type is a date-selection modifier, NOT a filter (verified: zero effect on counts)"
+    # Experiment 010: validated live 2026-09-30.
+  tv:
+    provider: tmdb                  # decided (experiment 011)
+    base: https://api.themoviedb.org/3
+    key_env: TMDB_API_KEY
+    new_seasons:                    # for seen shows — always show, no gate
+      signal: "tv/{id} -> seasons[] tail: season_number > last aired"
+      dated: "air_date in future, or next_episode_to_air with episode_number==1 -> 'Season N, starts <date>'"
+      undated: "air_date null + status Returning Series -> 'Season N announced, no date yet'"
+      note: "next_episode_to_air is empty for most returning shows — seasons[] is the signal (verified)"
+    new_shows:                      # for unseen shows — gated
+      discover: "/discover/tv?first_air_date.gte/lte&with_original_language=en"
+      gate: "popularity >= popularity_min OR confidence >= confidence_min"
+      scoring:
+        rules: "genre histogram overlap + creator overlap + network overlap vs seen-shows profile"
+        llm: "taste stage, batched: profile + candidates -> {id, confidence, reason}"
+    people_lookup: "/search/tv (title -> id, cached; pin for ambiguous titles e.g. The Office US vs UK)"
+    quirks:
+      - "TV popularity scale is small (max 20.3 in sample; movies hit 200+) — thresholds must be TV-calibrated"
+      - "trending/tv/week tracks viewing, not anticipation — useless for upcoming (0/20 unaired)"
+      - "undated-announcement shows (Severance S3) have no next_episode_to_air at all"
+    # Experiment 011: validated live 2026-09-30.
+
+# Source credibility tier for rule scoring (1 = primary/specialist, 3 = aggregator).
+tiers:
+  1: [nature, quanta, cbc, globeandmail, reuters, sec-edgar, wire-services, nasa]
+  2: [general-press, tech-press]
+  3: [aggregators, query-feeds]
