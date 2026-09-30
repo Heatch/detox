@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Detox — style preview</title>
+
+<!--
+  Style preview with fictional demo content.
+  Reference implementation of style-guide.md, filtered through anti-ai-design-decisions.md.
+  Fonts load from Google Fonts here for convenience only; the real app self-hosts
+  the same families via Fontsource. Every item on this page is invented.
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --canvas: #1A1D24;
+    --canvas-2: #21252E;
+    --ink: #EDE8DE;
+    --ink-muted: #A9AFBA;
+    --ink-faint: #868D99;
+    --accent: #D6AC52;
+    --accent-ink: #1A1D24;
+    --good: #8AA98E;
+    --alert: #BC6F6A;
+    --line: rgba(237, 232, 222, 0.08);
+    --control-line: rgba(237, 232, 222, 0.16);
+
+    --serif: "Newsreader", Georgia, serif;
+    --sans: "IBM Plex Sans", Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { background: var(--canvas); }
+
+  body {
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 16px;
+    line-height: 1.55;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 72px;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+    transition: color 120ms ease-out;
+  }
+  a:hover {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    transition: color 120ms ease-out;
+  }
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  .meta {
+    font-family: var(--sans);
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--ink-faint);
+  }
+  .small {
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--ink-muted);
+  }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* masthead */
+
+  .masthead {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 48px;
+    padding-bottom: 20px;
+    border-top: 1px solid var(--line);
+    padding-top: 20px;
+  }
+  .wordmark {
+    font-family: var(--serif);
+    font-size: 36px;
+    line-height: 1.15;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .wordmark .dot { color: var(--accent); }
+  .masthead-right {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  /* digest band */
+
+  .digest {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 48px;
+    padding: 32px 0;
+  }
+  .morning {
+    max-width: 68ch;
+    font-size: 16px;
+    line-height: 1.55;
+    color: var(--ink);
+  }
+  .morning .lead {
+    font-family: var(--serif);
+    font-size: 20px;
+    line-height: 1.3;
+    display: block;
+    padding-bottom: 8px;
+    color: var(--ink);
+  }
+  .digest-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 220px;
+  }
+  .btn {
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    border: 0;
+    border-radius: 4px;
+    padding: 12px 20px;
+    cursor: pointer;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 500;
+  }
+  .btn-primary:hover { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; }
+  .pill {
+    font-family: var(--sans);
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--ink-muted);
+    border: 1px solid var(--control-line);
+    border-radius: 999px;
+    padding: 4px 8px;
+    background: none;
+    cursor: pointer;
+    align-self: flex-start;
+    transition: color 120ms ease-out, border-color 120ms ease-out;
+  }
+  .pill:hover { color: var(--ink); border-color: var(--ink-faint); }
+  .pill-on { color: var(--accent); border-color: var(--accent); }
+  .tag {
+    font-family: var(--sans);
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--ink-muted);
+    border: 1px solid var(--control-line);
+    border-radius: 999px;
+    padding: 4px 8px;
+    display: inline-block;
+  }
+  .tag-row { display: flex; gap: 4px; padding-top: 8px; }
+  .earnings td:first-child { width: 48px; }
+
+  /* layout */
+
+  .columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 340px;
+    gap: 48px;
+    padding-top: 32px;
+    align-items: start;
+  }
+
+  /* lanes and items */
+
+  .lane { border-top: 1px solid var(--line); padding-top: 20px; margin-bottom: 48px; }
+  .lane:last-child { margin-bottom: 0; }
+  .lane-title {
+    font-family: var(--serif);
+    font-size: 27px;
+    line-height: 1.2;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .lane-context { padding-top: 4px; padding-bottom: 20px; }
+  .items > * + * { padding-top: 20px; }
+
+  .item-title {
+    font-family: var(--serif);
+    font-size: 20px;
+    line-height: 1.3;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .item-summary {
+    font-family: var(--serif);
+    font-size: 16px;
+    line-height: 1.55;
+    color: var(--ink-muted);
+    max-width: 68ch;
+    padding-top: 4px;
+  }
+  .item-meta { padding-top: 8px; }
+
+  /* tables */
+
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    font-family: var(--sans);
+    font-size: 12px;
+    line-height: 1.4;
+    font-weight: 400;
+    color: var(--ink-muted);
+    text-align: left;
+    padding: 0 8px 8px 0;
+    vertical-align: bottom;
+  }
+  td {
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    border-top: 1px solid var(--line);
+    padding: 8px 8px 8px 0;
+    vertical-align: top;
+  }
+  td.label { color: var(--ink-muted); width: 88px; }
+  .consensus td { color: var(--accent); }
+  .consensus td.label { color: var(--accent); }
+  .status-out { color: var(--alert); }
+  .status-questionable { color: var(--accent); }
+  .status-probable { color: var(--good); }
+
+  /* rail specifics */
+
+  .block + .block { margin-top: 48px; }
+  .subhead {
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--ink-muted);
+    padding-bottom: 12px;
+  }
+  .spread-note { padding-top: 12px; }
+  .spark { display: block; padding-top: 12px; }
+  .release-row { display: flex; gap: 12px; }
+  .release-date {
+    font-family: var(--sans);
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+    width: 40px;
+    flex: none;
+    padding-top: 8px;
+  }
+  .game-line { padding-top: 8px; }
+  .game-meta { padding-top: 8px; }
+
+  /* footer */
+
+  .footer {
+    border-top: 1px solid var(--line);
+    margin-top: 72px;
+    padding-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  @media (max-width: 1100px) {
+    .page { padding: 48px 32px; }
+    .columns { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .rail { grid-column: 1 / -1; }
+  }
+  @media (max-width: 720px) {
+    .columns { grid-template-columns: minmax(0, 1fr); }
+    .digest, .masthead { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="masthead">
+    <div class="wordmark">Detox<span class="dot">.</span></div>
+    <div class="masthead-right">
+      <div class="meta num">Wednesday, September 30</div>
+      <div class="meta num">Updated 7:02 this morning.</div>
+    </div>
+  </header>
+
+  <section class="digest">
+    <p class="morning">
+      <span class="lead">Good morning.</span>
+      The forecast sources agree on temperature and disagree on rain, so plan for a cool evening
+      and take an umbrella. The Raptors open the preseason on Friday against Boston with two
+      players listed as questionable. Two of your holdings report in the next week. The Alpine
+      rail referendum is the infrastructure story of the week.
+    </p>
+    <div class="digest-controls">
+      <div class="meta num">Selected 24 of 318 items. 12 clusters merged. LLM cost $0.011 of $0.05.</div>
+      <button class="btn btn-primary">Refresh</button>
+      <button class="pill pill-on">Show discarded items (294)</button>
+    </div>
+  </section>
+
+  <div class="columns">
+
+    <div class="col">
+
+      <section class="lane">
+        <h2 class="lane-title">Holdings</h2>
+        <p class="lane-context meta">From config/holdings.md. Earnings dates checked against two sources.</p>
+        <table class="earnings">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Company</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="num">Nov 5</td>
+              <td>Shopify<div class="meta num">TSX:SHOP</div></td>
+              <td>After close</td>
+            </tr>
+            <tr>
+              <td class="num">Nov 7</td>
+              <td>Enbridge<div class="meta num">TSX:ENB</div></td>
+              <td>Before open</td>
+            </tr>
+            <tr>
+              <td class="num">Oct 24</td>
+              <td>Microsoft<div class="meta num">NASDAQ:MSFT</div></td>
+              <td class="num">EPS $3.42 vs $3.31</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="items" style="padding-top: 20px;">
+          <article>
+            <h3 class="item-title"><a href="#">Shopify flags a logistics charge ahead of results</a></h3>
+            <p class="item-summary">Analysts trimmed estimates after the pre-announcement. The
+              earnings date has not moved.</p>
+            <div class="tag-row"><span class="tag">SHOP</span></div>
+            <p class="item-meta meta">Reuters, 4 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">Enbridge clears the last permit for its expansion</a></h3>
+            <p class="item-summary">The approval removes the main regulatory obstacle named on the
+              last call. Financing is the remaining risk.</p>
+            <div class="tag-row"><span class="tag">ENB</span></div>
+            <p class="item-meta meta">The Globe and Mail, 7 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">Analysts raise the enterprise spending forecast for the year</a></h3>
+            <p class="item-summary">The revised outlook names commerce platforms and cloud providers
+              as the main beneficiaries, which covers two of your holdings.</p>
+            <div class="tag-row"><span class="tag">MSFT</span><span class="tag">SHOP</span></div>
+            <p class="item-meta meta">Bloomberg, 9 hours ago</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="lane">
+        <h2 class="lane-title">Tech</h2>
+        <p class="lane-context meta">Selected 4 of 61 items.</p>
+        <div class="items">
+          <article>
+            <h3 class="item-title"><a href="#">Postgres 19 ships with native columnar storage</a></h3>
+            <p class="item-summary">The release adds columnar tables for analytical queries and lands
+              a rewritten vacuum scheduler. The release notes spend most of their length on migration
+              caveats.</p>
+            <p class="item-meta meta">The Register, 3 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">Rust's next edition finalizes the async trait story</a></h3>
+            <p class="item-summary">The language team merged the last of the async-in-traits work,
+              removing the largest remaining reason to reach for third-party crates.</p>
+            <p class="item-meta meta">InfoQ, 6 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">A CDN outage took out a dozen package registries</a></h3>
+            <p class="item-summary">Status pages agree the failure began in a single European region.
+              Three registries are still restoring package metadata.</p>
+            <p class="item-meta meta">Ars Technica, 11 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">SQLite's next release adds offline sync primitives</a></h3>
+            <p class="item-summary">The changelog describes a conflict resolution protocol intended
+              for local-first applications, with the usual warnings about pre-release quality.</p>
+            <p class="item-meta meta">Hacker News, 14 hours ago</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="lane">
+        <h2 class="lane-title">Science</h2>
+        <p class="lane-context meta">One item cut as a duplicate of the sea ice story.</p>
+        <div class="items">
+          <article>
+            <h3 class="item-title"><a href="#">Room-temperature superconductor claim fails a third replication</a></h3>
+            <p class="item-summary">Two independent labs report zero resistance only below 180 kelvin.
+              The original team disputes their sample preparation.</p>
+            <p class="item-meta meta">Nature News, 5 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">Antarctic sea ice hits a record winter low for the third year</a></h3>
+            <p class="item-summary">The measurement team calls the trend unambiguous and says the
+              mechanism behind it is still contested.</p>
+            <p class="item-meta meta">Phys.org, 8 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">A cheap malaria vaccine clears a large three-country trial</a></h3>
+            <p class="item-summary">Efficacy was 71 percent over two years, with the strongest results
+              in the youngest cohort. Manufacturing is the stated bottleneck.</p>
+            <p class="item-meta meta">ScienceDaily, 12 hours ago</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="lane">
+        <h2 class="lane-title">Math</h2>
+        <p class="lane-context meta">Selected 3 of 22 items. Source arithmetic only, no LLM pass.</p>
+        <div class="items">
+          <article>
+            <h3 class="item-title"><a href="#">A new bound tightens the twin prime gap</a></h3>
+            <p class="item-summary">The preprint improves the lim inf gap to 148, and the authors say
+              the method generalizes to a wider class of sieve problems.</p>
+            <p class="item-meta meta">arXiv, 7 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">A percolation conjecture falls in dimension four</a></h3>
+            <p class="item-summary">The proof settles a conjecture from the 1980s with a renormalization
+              argument the community had considered unpromising.</p>
+            <p class="item-meta meta">Quanta Magazine, 9 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">A 2023 proof is retracted after a reader finds a gap</a></h3>
+            <p class="item-summary">The journal published the original referee reports alongside the
+              retraction, which is unusual and, commentators argue, healthy.</p>
+            <p class="item-meta meta">AMS Notices, 1 day ago</p>
+          </article>
+        </div>
+      </section>
+
+    </div>
+
+    <div class="col">
+
+      <section class="lane">
+        <h2 class="lane-title">Infrastructure</h2>
+        <p class="lane-context meta">Selected 4 of 37 items. Two Ontario Line stories merged into one.</p>
+        <div class="items">
+          <article>
+            <h3 class="item-title"><a href="#">Alpine high-speed link clears its final referendum</a></h3>
+            <p class="item-summary">Voters approved the remaining four billion in financing. Boring
+              machines restart in spring on the base tunnel's last section.</p>
+            <p class="item-meta meta">Railway Technology, 4 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">The Ontario Line's tunnel boring machines reach Exhibition</a></h3>
+            <p class="item-summary">Metrolinx says the eastern drive is four months ahead of the
+              published schedule, with station fit-out now the critical path.</p>
+            <p class="item-meta meta">BlogTO, 6 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">India approves a 1,200 kilometre freight corridor extension</a></h3>
+            <p class="item-summary">The corridor is meant to cut container transit times to the ports
+              by a third. Land acquisition is the stated risk in every review.</p>
+            <p class="item-meta meta">Global Construction Review, 10 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">Chile's green hydrogen megaproject loses its anchor buyer</a></h3>
+            <p class="item-summary">The developers are shopping the offtake agreement around. Export
+              terminal work continues on schedule for now.</p>
+            <p class="item-meta meta">New Civil Engineer, 1 day ago</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="lane">
+        <h2 class="lane-title">Canada and the GTA</h2>
+        <p class="lane-context meta">Selected 4 of 84 items.</p>
+        <div class="items">
+          <article>
+            <h3 class="item-title"><a href="#">GTA mayors agree on a single regional fare card</a></h3>
+            <p class="item-summary">The agreement covers the TTC, GO, and the suburban systems, with a
+              provincially funded cutover planned for 2028.</p>
+            <p class="item-meta meta">CBC News, 2 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">Ottawa rewrites impact assessment rules for transmission lines</a></h3>
+            <p class="item-summary">Provincial grid operators had called the previous process the main
+              reason interconnect projects slipped by years.</p>
+            <p class="item-meta meta">The Globe and Mail, 5 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">Toronto's rental vacancy rate ticks up for the first time since 2021</a></h3>
+            <p class="item-summary">Analysts attribute the change to completions finally catching up
+              with demand, and expect the effect to be temporary.</p>
+            <p class="item-meta meta">Toronto Star, 7 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">A Brampton battery plant pauses hiring pending a supply contract</a></h3>
+            <p class="item-summary">The company calls the pause temporary and says provincial grant
+              conditions are unaffected. The union disputes the timeline.</p>
+            <p class="item-meta meta">CityNews, 13 hours ago</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="lane">
+        <h2 class="lane-title">Spaceflight</h2>
+        <p class="lane-context meta">Selected 4 of 29 items.</p>
+        <div class="items">
+          <article>
+            <h3 class="item-title"><a href="#">Orbital refuelling test slips to December</a></h3>
+            <p class="item-summary">The programme cites a static fire anomaly. Published manifests for
+              the rest of the year look unaffected.</p>
+            <p class="item-meta meta">Spaceflight Now, 3 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">Europe's reusable upper stage passes its first long-duration firing</a></h3>
+            <p class="item-summary">The 20-minute burn is the longest to date for this engine. The
+              agency called the thermal margins comfortable.</p>
+            <p class="item-meta meta">Ars Technica, 8 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">A lunar cargo lander loses attitude control two days before landing</a></h3>
+            <p class="item-summary">The operator has ended the mission. The science payload was insured,
+              and the failure review is expected in six weeks.</p>
+            <p class="item-meta meta">NASASpaceflight, 10 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">Next crew rotation date set for the station</a></h3>
+            <p class="item-summary">The launch window opens November 14, with the returning crew staying
+              on for a five-day handover.</p>
+            <p class="item-meta meta">NASA, 1 day ago</p>
+          </article>
+        </div>
+      </section>
+
+    </div>
+
+    <div class="rail">
+
+      <section class="lane block">
+        <h2 class="lane-title">Weather</h2>
+        <p class="lane-context meta">Three sources, fetched 7:02. Consensus is the median.</p>
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th>Environment Canada</th>
+              <th>Open-Meteo</th>
+              <th>MET Norway</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="label">High</td>
+              <td class="num">14&deg;</td>
+              <td class="num">15&deg;</td>
+              <td class="num">13&deg;</td>
+            </tr>
+            <tr>
+              <td class="label">Low</td>
+              <td class="num">7&deg;</td>
+              <td class="num">6&deg;</td>
+              <td class="num">7&deg;</td>
+            </tr>
+            <tr>
+              <td class="label">Rain</td>
+              <td class="num">55%</td>
+              <td class="num">40%</td>
+              <td class="num">60%</td>
+            </tr>
+            <tr>
+              <td class="label">Wind (km/h)</td>
+              <td class="num">18</td>
+              <td class="num">22</td>
+              <td class="num">20</td>
+            </tr>
+            <tr class="consensus">
+              <td class="label">Consensus</td>
+              <td class="num">14&deg;</td>
+              <td class="num">55%</td>
+              <td class="num">20</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="spread-note meta">Sources agree on temperature within 2 degrees. They disagree on
+          rain: 40 to 60 percent. The consensus row shows high, rain, and wind.</p>
+        <svg class="spark" width="308" height="44" viewBox="0 0 308 44" role="img" aria-label="Seven-day high temperatures, trending down then up">
+          <polyline points="0,22 51,27 102,37 153,32 204,17 255,7 306,12" fill="none" stroke="#868D99" stroke-width="1.5"></polyline>
+          <circle cx="0" cy="22" r="3" fill="#D6AC52"></circle>
+        </svg>
+        <p class="meta num">Seven-day highs: 14, 13, 11, 12, 15, 17, 16.</p>
+      </section>
+
+      <section class="lane block">
+        <h2 class="lane-title">Raptors</h2>
+        <p class="lane-context meta">Preseason. Injury report as of 6:40 this morning.</p>
+        <p class="item-title"><a href="#">Friday, October 2</a></p>
+        <p class="game-line small">vs Boston Celtics, 7:30 pm</p>
+        <p class="game-meta meta">Scotiabank Arena, TSN</p>
+        <table style="padding-top: 20px;">
+          <thead>
+            <tr>
+              <th>Player</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>J. Karras<div class="meta">ankle, re-evaluated Friday</div></td>
+              <td class="status-out num">Out</td>
+            </tr>
+            <tr>
+              <td>M. Adeyemi<div class="meta">knee soreness</div></td>
+              <td class="status-questionable num">Questionable</td>
+            </tr>
+            <tr>
+              <td>T. Lindqvist<div class="meta">illness</div></td>
+              <td class="status-probable num">Probable</td>
+            </tr>
+            <tr>
+              <td>D. Osei<div class="meta">hamstring, no timeline</div></td>
+              <td class="status-out num">Out</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="spread-note meta">Last game: Raptors 104, Celtics 99, September 28. East standings:
+          fifth, two games behind Boston.</p>
+      </section>
+
+      <section class="lane block">
+        <h2 class="lane-title">Coming up</h2>
+        <p class="lane-context meta">From your watchlist and the artists you follow on Spotify.</p>
+        <div class="items">
+          <article class="release-row">
+            <div class="release-date">Oct 9</div>
+            <div>
+              <h3 class="item-title"><a href="#">Night Signal</a></h3>
+              <p class="item-meta meta">Halcyon Fields, album</p>
+            </div>
+          </article>
+          <article class="release-row">
+            <div class="release-date">Oct 12</div>
+            <div>
+              <h3 class="item-title"><a href="#">The Long Corridor</a></h3>
+              <p class="item-meta meta">Season 2, streaming</p>
+            </div>
+          </article>
+          <article class="release-row">
+            <div class="release-date">Oct 17</div>
+            <div>
+              <h3 class="item-title"><a href="#">Salt Flats</a></h3>
+              <p class="item-meta meta">Film, limited release in Toronto</p>
+            </div>
+          </article>
+          <article class="release-row">
+            <div class="release-date">Oct 24</div>
+            <div>
+              <h3 class="item-title"><a href="#">Meridian</a></h3>
+              <p class="item-meta meta">Film, streaming</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="lane block">
+        <h2 class="lane-title">Reddit</h2>
+        <p class="lane-context meta">Top of the day from two subreddits. Game threads filtered out.</p>
+
+        <p class="subhead">r/nba</p>
+        <div class="items">
+          <article>
+            <h3 class="item-title"><a href="#">The Raptors' bench rotation looks very different this year</a></h3>
+            <p class="item-meta meta num">412 comments, 5 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">How the new take foul rules are quietly changing close games</a></h3>
+            <p class="item-meta meta num">287 comments, 8 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">Preseason overreactions thread</a></h3>
+            <p class="item-meta meta num">193 comments, 12 hours ago</p>
+          </article>
+        </div>
+
+        <p class="subhead" style="padding-top: 32px;">r/uwaterloo</p>
+        <div class="items">
+          <article>
+            <h3 class="item-title"><a href="#">Winter 2027 course registration megathread</a></h3>
+            <p class="item-meta meta num">508 comments, 3 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">The new engineering building timetable is out and it is worse</a></h3>
+            <p class="item-meta meta num">221 comments, 7 hours ago</p>
+          </article>
+          <article>
+            <h3 class="item-title"><a href="#">Co-op employers who ghosted us, a running list</a></h3>
+            <p class="item-meta meta num">174 comments, 1 day ago</p>
+          </article>
+        </div>
+      </section>
+
+    </div>
+
+  </div>
+
+  <footer class="footer">
+    <p class="meta num">Weather from Environment Canada, Open-Meteo, and MET Norway. Reddit via the
+      official API. News from 41 feeds. Holdings from config/holdings.md. LLM cost today $0.011
+      of $0.05.</p>
+    <p class="meta">Demo content. Every item on this page is fictional, including the injury report.
+      Built to style-guide.md and anti-ai-design-decisions.md.</p>
+  </footer>
+
+</div>
+</body>
+</html>
