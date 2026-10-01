@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
-import { InterestsSchema, ModelsSchema, SettingsSchema } from "./types.js";
-import type { Interests, Models, Settings } from "./types.js";
+import { InterestsSchema, ModelsSchema, SettingsSchema, SourcesSchema } from "./types.js";
+import type { Interests, Models, Settings, Sources } from "./types.js";
 
 export interface Holding {
   ticker: string;
@@ -68,20 +68,49 @@ export interface LoadedConfig {
   interests: Interests;
   settings: Settings;
   models: Models;
-  sources: unknown;
+  sources: Sources;
   holdings: Holding[];
+  env: Record<string, string>;
 }
 
 export function loadConfig(repoRoot: string): LoadedConfig {
   const interests = InterestsSchema.parse(readYaml(repoRoot, "config/interests.yaml"));
   const settings = SettingsSchema.parse(readYaml(repoRoot, "config/settings.yaml"));
   const models = ModelsSchema.parse(readYaml(repoRoot, "config/models.yaml"));
-  const sources = readYaml(repoRoot, "config/sources.yaml");
+  const sources = SourcesSchema.parse(readYaml(repoRoot, "config/sources.yaml"));
   // holdings.md is markdown, not YAML — parse the raw text only.
   const holdings = parseHoldings(readText(repoRoot, "config/holdings.md"));
-  return { interests, settings, models, sources, holdings };
+  const env = loadEnv(repoRoot);
+  return { interests, settings, models, sources, holdings, env };
 }
 
 function readText(repoRoot: string, rel: string): string {
   return readFileSync(join(repoRoot, rel), "utf8");
+}
+
+// .env loader — the only place secrets are read (plan §11). Simple
+// KEY="value" / KEY=value lines; # comments; no variable expansion.
+export function loadEnv(repoRoot: string): Record<string, string> {
+  const env: Record<string, string> = {};
+  let text: string;
+  try {
+    text = readText(repoRoot, ".env");
+  } catch {
+    return env;
+  }
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#") || !line.includes("=")) continue;
+    const idx = line.indexOf("=");
+    const key = line.slice(0, idx).trim();
+    let value = line.slice(idx + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (key) env[key] = value;
+  }
+  return env;
 }

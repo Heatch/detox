@@ -20,6 +20,12 @@ stages:
   taste:     { model: bulk,        mode: llm }          # TV new-show confidence (experiment 011)
                                                          # rules-only mode = genre/creator/network overlap alone
 
+overrides:
+  # Reddit gets NO LLM involvement at all (user decision 2026-10-01): full
+  # posts and top comments render raw. This is not a degradation mode — it is
+  # the permanent design.
+  reddit: { summarize: { model: bulk, mode: off } }
+
 budget:
   daily_cap_usd: 0.05
   over_cap_behavior: rules-only   # never block the run; degrade and say so

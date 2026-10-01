@@ -1,0 +1,194 @@
+{
+ "count": 10,
+ "events": [
+  {
+   "id": 1219417,
+   "canonical_title": "FedEx orders 2,000 electric trucks from Harbinger in $300M deal",
+   "summary": "The order -- Harbinger's biggest ever -- comes as the startup is reportedly considering an IPO.",
+   "category": "tech",
+   "first_seen_at": "2026-09-30T15:26:02.000Z",
+   "last_seen_at": "2026-10-01T02:25:55.000Z",
+   "article_count": 2,
+   "source_count": 2,
+   "sources": [
+    "cleantechnica",
+    "techcrunch"
+   ],
+   "url": "https://techcrunch.com/2026/09/30/fedex-orders-2000-electric-trucks-from-harbinger-in-300m-deal/",
+   "corroboration": 2,
+   "confidence": 0.6666666666666666
+  },
+  {
+   "id": 1223417,
+   "canonical_title": "Fifth unvaccinated person dies of measles; CDC still not counting all deaths",
+   "summary": "State health officials race to vaccinate residents by giving over 8,500 doses.",
+   "category": "tech",
+   "first_seen_at": "2026-09-30T21:37:54.000Z",
+   "last_seen_at": "2026-10-01T02:15:19.000Z",
+   "article_count": 3,
+   "source_count": 3,
+   "sources": [
+    "arstechnica",
+    "freemalaysiatoday",
+    "gulfnews"
+   ],
+   "url": "https://arstechnica.com/health/2026/09/fifth-unvaccinated-person-dies-of-measles-cdc-still-not-counting-all-deaths/",
+   "corroboration": 3,
+   "confidence": 1
+  },
+  {
+   "id": 1217538,
+   "canonical_title": "WhatsApp introduces optional parental controls for teenagers",
+   "summary": "The social messaging app will let parents decide on privacy settings for their child's account.",
+   "category": "tech",
+   "first_seen_at": "2026-09-30T13:01:30.000Z",
+   "last_seen_at": "2026-10-01T02:09:00.000Z",
+   "article_count": 4,
+   "source_count": 4,
+   "sources": [
+    "9to5mac",
+    "bbc-tech",
+    "gulfnews",
+    "techcrunch"
+   ],
+   "url": "https://www.bbc.co.uk/news/articles/cm986x65we88o?at_medium=RSS&at_campaign=rss",
+   "corroboration": 4,
+   "confidence": 1
+  },
+  {
+   "id": 1218560,
+   "canonical_title": "VW-Softwarefirma: Cariad baut angeblich 1.000 weitere Stellen ab",
+   "summary": "Der Stellenabbau bei der VW-Tochter Cariad geht offenbar weiter. Bei der Softwarefirma w\u00e4re jeder vierte Arbeitsplatz betroffen. (Cariad, Elektroauto)",
+   "category": "tech",
+   "first_seen_at": "2026-09-30T14:17:02.000Z",
+   "last_seen_at": "2026-10-01T02:00:18.000Z",
+   "article_count": 3,
+   "source_count": 3,
+   "sources": [
+    "golem",
+    "heise",
+    "zeit"
+   ],
+   "url": "https://www.golem.de/news/vw-softwarefirma-cariad-baut-angeblich-1-000-weitere-stellen-ab-2609-213592.html",
+   "corroboration": 3,
+   "confidence": 1
+  },
+  {
+   "id": 1189910,
+   "canonical_title": "Google wants Gemini 4 out \u2018much earlier\u2019 than the end of the year",
+   "summary": "Google wants to release Gemini 4 \u201cmuch earlier\u201d than the end of the year, said Koray Kavukcuoglu, who runs Google DeepMind. The model is now in post-training, the stage where engineers refine its behaviour and test its safety. Google is also trying it out inside its Antigravity coding tool. Kavukcuoglu spoke on stage at The [\u2026] This story continues at The Next Web",
+   "category": "tech",
+   "first_seen_at": "2026-09-28T11:25:35.000Z",
+   "last_seen_at": "2026-10-01T01:12:04.000Z",
+   "article_count": 6,
+   "source_count": 6,
+   "sources": [
+    "axios",
+    "channelnewsasia",
+    "freemalaysiatoday",
+    "koreatimes",
+    "thenextweb",
+    "theverge"
+   ],
+   "url": "https://thenextweb.com/news/gemini-4-release-kavukcuoglu-post-training",
+   "corroboration": 6,
+   "confidence": 1
+  },
+  {
+   "id": 1207347,
+   "canonical_title": "OpenAI launches Dots, its bubbly agentic avatar",
+   "summary": "Dots are meant to operate independent of any specific hardware or interface, pursuing user-defined goals continuously in the background with minimal oversight.",
+   "category": "tech",
+   "first_seen_at": "2026-09-29T17:15:00.000Z",
+   "last_seen_at": "2026-10-01T00:29:50.000Z",
+   "article_count": 6,
+   "source_count": 5,
+   "sources": [
+    "antaranews",
+    "businessinsider",
+    "cbsnews",
+    "engadget",
+    "techcrunch"
+   ],
+   "url": "https://www.engadget.com/2272230/dots-are-openais-new-personal-agents-and-soon-youll-be-able-to-control-several-of-them/",
+   "corroboration": 5,
+   "confidence": 1
+  },
+  {
+   "id": 1223451,
+   "canonical_title": "Elon Musk and Palmer Luckey will advise the government on the future of warfare",
+   "summary": "So will Newt Gingrich, for some reason.",
+   "category": "tech",
+   "first_seen_at": "2026-09-30T22:22:38.000Z",
+   "last_seen_at": "2026-09-30T23:08:00.000Z",
+   "article_count": 2,
+   "source_count": 2,
+   "sources": [
+    "engadget",
+    "techcrunch"
+   ],
+   "url": "https://www.engadget.com/2274082/elon-musk-and-palmer-luckey-will-advise-the-government-on-the-future-of-warfare/",
+   "corroboration": 2,
+   "confidence": 0.6666666666666666
+  },
+  {
+   "id": 1191595,
+   "canonical_title": "Madrid concentra cada vez m\u00e1s riqueza: el patrimonio medio de sus grandes fortunas ya cuadruplica al de Catalu\u00f1a",
+   "summary": "Cada septiembre, Hacienda publica sus estad\u00edsticas sobre las tablas del Impuesto de Patrimonio, un impuesto que, por su naturaleza, nos permite tomar el pulso al estado de la riqueza en Espa\u00f1a y a su distribuci\u00f3n geogr\u00e1fica. \u00bfD\u00f3nde hay un mayor n\u00famero de ricos? Este a\u00f1o la foto trae un giro. Los declarantes del Impuesto de Patrimonio de la Comunidad han incrementado su riqueza personal un 17,8% desde 2019, registrando un patrimonio medio de 11,7 millones de euros. Por su parte, los ciudadanos m\u00e1s adinerados de Catalu\u00f1a tambi\u00e9n registraban un incremento del 7,7%, dejando una fortuna personal m\u2026",
+   "category": "tech",
+   "first_seen_at": "2026-09-28T13:46:26.000Z",
+   "last_seen_at": "2026-09-30T22:05:00.000Z",
+   "article_count": 3,
+   "source_count": 3,
+   "sources": [
+    "elpais",
+    "lavanguardia",
+    "xataka"
+   ],
+   "url": "https://www.xataka.com/empresas-y-economia/madrid-concentra-cada-vez-riqueza-patrimonio-medio-sus-grandes-fortunas-cuadruplica-al-cataluna",
+   "corroboration": 3,
+   "confidence": 1
+  },
+  {
+   "id": 1220176,
+   "canonical_title": "&#8216;Xbox is not for sale&#8217; says Microsoft&#8217;s gaming chief",
+   "summary": "Asha Sharma. | Image: The Verge, Microsoft Xbox CEO Asha Sharma has denied reports that Microsoft is considering selling off its Xbox business. The Information reported in June that Microsoft CEO Satya Nadella and CFO Amy Hood had been considering spinning out Xbox, and then reported earlier this month that both execs have \"more recently supported Sharma's plans to overhaul the unit.\" \"Xbox is not for sale,\" says Sharma in an interview with The New York times. \"We will do whatever it takes to set the company up for success, and we will look at the right partnerships, the right operating model\u2026",
+   "category": "tech",
+   "first_seen_at": "2026-09-30T16:24:30.000Z",
+   "last_seen_at": "2026-09-30T22:00:00.000Z",
+   "article_count": 2,
+   "source_count": 2,
+   "sources": [
+    "slashdot",
+    "theverge"
+   ],
+   "url": "https://www.theverge.com/news/1002736/xbox-not-for-sale-asha-sharma-interview",
+   "corroboration": 2,
+   "confidence": 0.6666666666666666
+  },
+  {
+   "id": 1201661,
+   "canonical_title": "FBI Staff Memo Reportedly Assumes ShinyHunters Stole \u2018All FBI Employees\u2019 Personal Data",
+   "summary": "It's been a rough week for the FBI.",
+   "category": "tech",
+   "first_seen_at": "2026-09-29T09:30:30.000Z",
+   "last_seen_at": "2026-09-30T21:16:04.000Z",
+   "article_count": 5,
+   "source_count": 5,
+   "sources": [
+    "decrypt",
+    "gizmodo",
+    "independent-world",
+    "npr",
+    "nyt-politics"
+   ],
+   "url": "https://gizmodo.com/fbi-staff-memo-reportedly-assumes-shinyhunters-stole-all-fbi-employees-personal-data-2000818601",
+   "corroboration": 5,
+   "confidence": 1
+  }
+ ],
+ "window": {
+  "from": "2026-09-01T02:48:28.264Z",
+  "note": "the free tier can query the last 30 days \u2014 premium unlocks the full archive (https://newsflash.sh/#pricing)"
+ }
+}

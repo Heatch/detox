@@ -219,8 +219,7 @@ export type Settings = z.infer<typeof SettingsSchema>;
 
 const StageConfigSchema = z.object({ model: z.string(), mode: LlmModeSchema });
 
-export const ModelsSchema = z.object({
-  router: z.object({ provider: z.string(), key_env: z.string() }).passthrough(),
+export const ModelsSchema = z.object({  router: z.object({ provider: z.string(), key_env: z.string() }).passthrough(),
   models: z.object({ bulk: z.string(), interactive: z.string() }).passthrough(),
   stages: z.object({
     select: StageConfigSchema,
@@ -236,6 +235,9 @@ export const ModelsSchema = z.object({
       cache: z.object({ key: z.string(), ttl_days: z.number() }).passthrough().optional(),
     })
     .passthrough(),
+  // Per-lane stage overrides, e.g. reddit: { summarize: { mode: off } }.
+  // An override is permanent design, not degradation.
+  overrides: z.record(z.record(StageConfigSchema)).default({}),
 });
 export type Models = z.infer<typeof ModelsSchema>;
 
@@ -244,18 +246,70 @@ export type Models = z.infer<typeof ModelsSchema>;
 export const SnapshotItemSchema = z.object({
   id: z.string(),
   title: z.string(),
-  summary: z.string().optional(),
+  summary: z.string().nullable().optional(),
+  content: z.string().optional(),
+  comments: z
+    .array(
+      z.object({
+        author: z.string().optional(),
+        score: z.number().nullable().optional(),
+        body: z.string().optional(),
+      })
+    )
+    .optional(),
   meta: z.object({ outlet: z.string().optional(), age: z.string().optional() }).passthrough().optional(),
   url: z.string().optional(),
   score: z.record(z.unknown()).optional(),
 });
 export type SnapshotItem = z.infer<typeof SnapshotItemSchema>;
 
+// Sources config — loose by design (families evolve independently), but the
+// parts Phase 1 adapters consume are typed. Unknown families pass through.
+const LaneQuerySchema = z
+  .object({
+    category: z.string().optional(),
+    q: z.string().optional(),
+    semantic: z.number().optional(),
+    min_sources: z.number().optional(),
+  })
+  .passthrough();
+
+export const SourcesSchema = z
+  .object({
+    newsflash: z
+      .object({
+        key_env: z.string(),
+        base: z.string(),
+        defaults: z
+          .object({
+            relevance_floor: z.number().optional(),
+            langs: z.array(z.string()).optional(),
+            min_sources: z.number().optional(),
+            window_hours: z.number().optional(),
+          })
+          .passthrough()
+          .optional(),
+        lanes: z.record(LaneQuerySchema).optional(),
+      })
+      .passthrough()
+      .optional(),
+    reddit: z
+      .object({ key_env: z.string(), auth: z.string().optional(), sort: z.string().optional() })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+export type Sources = z.infer<typeof SourcesSchema>;
+
 export const SnapshotSchema = z.object({
   generatedAt: z.string(),
   runId: z.number(),
   laneCounts: z.record(z.object({ shown: z.number(), collected: z.number() })),
   digest: z.object({ text: z.string(), generatedBy: z.enum(["llm", "template"]) }),
+  laneStatus: z
+    .record(z.object({ ok: z.boolean(), note: z.string().nullable() }))
+    .optional()
+    .default({}),
   lanes: z.record(z.unknown()),
   cost: z.object({ usdToday: z.number(), capUsd: z.number(), degraded: z.boolean() }),
 });

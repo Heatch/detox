@@ -87,6 +87,7 @@ export function buildStubSnapshot(runId: number): Snapshot {
       text: "Good morning. Placeholder sources agree on temperature and disagree on rain, so take an umbrella. The Raptors open Friday with two players questionable.",
       generatedBy: "template",
     },
+    laneStatus: {},
     lanes,
     cost: { usdToday: 0.011, capUsd: 0.05, degraded: false },
   };

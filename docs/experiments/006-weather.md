@@ -31,7 +31,7 @@ median of the three sources. Design preview built against these real numbers:
 |---|---|---|---|
 | Environment Canada | `GET api.weather.gc.ca/collections/citypageweather-realtime/items/{id}` | 24 hourly values + 13 day/night forecast periods (≈7 days) + current conditions, warnings, sunrise/sunset | Exact stations exist: Toronto `on-143`, Vaughan `on-64`, Kitchener-Waterloo `on-82`. Values are `{en, fr}` nested dicts. Hourly `timestamp` is a plain string (other fields are dicts — inconsistent). |
 | Open-Meteo | `GET api.open-meteo.com/v1/forecast?latitude&longitude&hourly=temperature_2m&daily=...` | 168 hourly points (7 days) + 7 daily max/min, per exact lat/lon | Simplest payload of the three. Elevation-aware (Toronto 99 m, Vaughan 223 m, Waterloo 324 m). |
-| MET Norway | `GET api.met.no/weatherapi/locationforecast/2.0/compact?lat&lon` | ~88 entries: hourly-ish for ~48 h, then 6-hourly out to ~9 days | Requires a descriptive User-Agent. **Python's cert store on this host fails TLS verification for api.met.no; curl works fine** — use curl/certifi in the adapter, or pin the CA. |
+| MET Norway | `GET api.met.no/weatherapi/locationforecast/2.0/compact?lat&lon` | ~88 entries: hourly-ish for ~48 h, then 6-hourly out to ~9 days | Requires a descriptive User-Agent. **TLS outcome (Phase 1, 2026-10-01): Node/undici verifies fine — the Python cert-store failure does not apply.** No mitigation needed; plain `fetch` with the descriptive UA. |
 
 **Sample (Toronto, Sep 30, day-part means):** afternoon EC 23° / Open-Meteo
 21° / MET 21° — sources agree within 2°. Real disagreements showed up in the

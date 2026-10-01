@@ -8,11 +8,44 @@ import "@fontsource/ibm-plex-sans/400.css";
 import "@fontsource/ibm-plex-sans/500.css";
 import { readSnapshot } from "./api/state.js";
 
+interface Comment {
+  author?: string;
+  score?: number | null;
+  body?: string;
+}
+
+interface LaneItem {
+  id: string;
+  title: string;
+  summary?: string | null;
+  content?: string;
+  comments?: Comment[];
+  meta?: { outlet?: string; age?: string; score?: number; comments?: number };
+  url?: string;
+}
+
+interface WeatherLocation {
+  id: string;
+  name: string;
+  context?: string;
+  parts?: { name: string; consensus: number | null; sources: Record<string, number | null> }[];
+  spread?: string;
+  week?: {
+    day: string;
+    date: string;
+    consensus: [number | null, number | null];
+    sources: Record<string, [number | null, number | null]>;
+    spread?: string;
+  }[];
+}
+
 interface LaneBlock {
   title?: string;
-  items?: { id: string; title: string; summary?: string; meta?: { outlet?: string; age?: string }; url?: string }[];
+  items?: LaneItem[];
   context?: string;
-  locations?: string[];
+  defaultLocation?: string;
+  locations?: WeatherLocation[];
+  // v1 stub shape (kept working until replaced)
   parts?: { name: string; consensus: number | null; sources: (number | null)[] }[];
 }
 
@@ -22,6 +55,7 @@ const snap = (snapshot ?? {}) as {
   runId?: number;
   laneCounts?: Record<string, { shown: number; collected: number }>;
   digest?: { text: string; generatedBy: string };
+  laneStatus?: Record<string, { ok: boolean; note: string | null }>;
   lanes?: Record<string, LaneBlock>;
   cost?: { usdToday: number; capUsd: number; degraded: boolean };
 };
@@ -31,16 +65,17 @@ const shownTotal = Object.values(counts).reduce((a, c) => a + (c.shown ?? 0), 0)
 const collectedTotal = Object.values(counts).reduce((a, c) => a + (c.collected ?? 0), 0);
 const cost = snap.cost ?? { usdToday: 0, capUsd: 0.05, degraded: false };
 const lanes = snap.lanes ?? {};
+const laneStatus = snap.laneStatus ?? {};
 const weather = (lanes["weather"] ?? {}) as LaneBlock;
 
 const dateStr = snap.generatedAt
   ? new Date(snap.generatedAt).toLocaleDateString("en-CA", { weekday: "long", month: "long", day: "numeric", timeZone: "America/Toronto" })
   : "No snapshot yet";
 
-function laneItems(id: string) {
+function laneItems(id: string): (LaneItem & { metaText: string })[] {
   return ((lanes[id] as LaneBlock | undefined)?.items ?? []).map((it) => ({
     ...it,
-    meta: [it.meta?.outlet, it.meta?.age].filter(Boolean).join(", "),
+    metaText: [it.meta?.outlet, it.meta?.age].filter(Boolean).join(", "),
   }));
 }
 function laneTitle(id: string, fallback: string) {
@@ -50,11 +85,18 @@ function laneContext(id: string) {
   const c = counts[id];
   return c ? `Selected ${c.shown} of ${c.collected} items.` : undefined;
 }
+function laneNote(id: string) {
+  const s = laneStatus[id];
+  return s && !s.ok ? s.note ?? "Source did not respond." : undefined;
+}
 
 // Layout (§9.9): masthead → digest → weather → two news columns + rail.
 const newsLeft = ["tech", "science"];
 const newsRight = ["holdings", "sports"];
 const rail = ["releases", "reddit-nba", "reddit-uwaterloo"];
+const railReddit = ["reddit-nba", "reddit-torontoraptors", "reddit-uwaterloo"];
+const railRest = ["releases"];
+const SOURCE_NAMES: Record<string, string> = { envcan: "Environment Canada", openmeteo: "Open-Meteo", metno: "MET Norway" };
 ---
 <!DOCTYPE html>
 <html lang="en">
@@ -83,40 +125,125 @@ const rail = ["releases", "reddit-nba", "reddit-uwaterloo"];
 
   <section class="lane" aria-label="Weather">
     <h2 class="lane-title">Weather</h2>
-    <p class="lane-context meta">{weather.context ?? ""}</p>
-    <table>
-      <thead><tr><th></th><th>Consensus</th><th>Environment Canada</th><th>Open-Meteo</th><th>MET Norway</th></tr></thead>
-      <tbody>
-        {(weather.parts ?? []).map((p) => (
-          <tr>
-            <td>{p.name}</td>
-            <td class="cons num">{p.consensus ?? "—"}°</td>
-            {(p.sources ?? []).map((s) => (<td class="num">{s ?? "—"}°</td>))}
-          </tr>
+    {(weather.locations ?? []).length > 0 ? (
+      <>
+        <div class="pills" role="group" aria-label="Location">
+          {weather.locations!.map((loc, i) => (
+            <button class={`pill${i === 0 ? " pill-on" : ""}`} type="button" data-loc={loc.id}>{loc.name}</button>
+          ))}
+        </div>
+        {weather.locations!.map((loc, i) => (
+          <div class="loc" data-loc={loc.id} hidden={i !== 0}>
+            {loc.context && <p class="lane-context meta">{loc.context}</p>}
+            {laneNote("weather") && <p class="lane-context meta">{laneNote("weather")}</p>}
+            <table>
+              <thead><tr><th></th><th>Consensus</th><th>Environment Canada</th><th>Open-Meteo</th><th>MET Norway</th></tr></thead>
+              <tbody>
+                {(loc.parts ?? []).map((p) => (
+                  <tr>
+                    <td>{p.name}</td>
+                    <td class="cons num">{p.consensus ?? "—"}°</td>
+                    <td class="num">{p.sources["envcan"] ?? "—"}°</td>
+                    <td class="num">{p.sources["openmeteo"] ?? "—"}°</td>
+                    <td class="num">{p.sources["metno"] ?? "—"}°</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {(loc.week ?? []).length > 0 && (
+              <table>
+                <thead><tr><th></th><th>Consensus</th><th>Environment Canada</th><th>Open-Meteo</th><th>MET Norway</th></tr></thead>
+                <tbody>
+                  {(loc.week ?? []).map((w) => (
+                    <tr>
+                      <td>{w.day}<br /><span class="meta num">{w.date}</span></td>
+                      <td class="cons num">{w.consensus[0] ?? "—"}° <span class="meta">{w.consensus[1] ?? "—"}°</span>{w.spread && <><br /><span class="meta">{w.spread}</span></>}</td>
+                      <td class="num">{w.sources["envcan"]?.[0] ?? "—"}° <span class="meta">{w.sources["envcan"]?.[1] ?? "—"}°</span></td>
+                      <td class="num">{w.sources["openmeteo"]?.[0] ?? "—"}° <span class="meta">{w.sources["openmeteo"]?.[1] ?? "—"}°</span></td>
+                      <td class="num">{w.sources["metno"]?.[0] ?? "—"}° <span class="meta">{w.sources["metno"]?.[1] ?? "—"}°</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {loc.spread && <p class="meta">{loc.spread}</p>}
+          </div>
         ))}
-      </tbody>
-    </table>
+        <script>
+          document.querySelectorAll(".pill[data-loc]").forEach((pill) => {
+            pill.addEventListener("click", () => {
+              const want = pill.getAttribute("data-loc");
+              document.querySelectorAll(".pill[data-loc]").forEach((p) =>
+                p.classList.toggle("pill-on", p === pill));
+              document.querySelectorAll(".loc[data-loc]").forEach((l) => {
+                l.toggleAttribute("hidden", l.getAttribute("data-loc") !== want);
+              });
+            });
+          });
+        </script>
+      </>
+    ) : (
+      <>
+        <p class="lane-context meta">{weather.context ?? ""}</p>
+        <table>
+          <thead><tr><th></th><th>Consensus</th><th>Environment Canada</th><th>Open-Meteo</th><th>MET Norway</th></tr></thead>
+          <tbody>
+            {(weather.parts ?? []).map((p) => (
+              <tr>
+                <td>{p.name}</td>
+                <td class="cons num">{p.consensus ?? "—"}°</td>
+                {(p.sources ?? []).map((s) => (<td class="num">{s ?? "—"}°</td>))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </>
+    )}
   </section>
 
   <div class="columns">
     <div class="col">
       {newsLeft.map((id) => (
         <Lane title={laneTitle(id, id)} context={laneContext(id)}>
-          {laneItems(id).map((it) => (<Item title={it.title} summary={it.summary} meta={it.meta} url={it.url} />))}
+          {laneNote(id) && <p class="meta">{laneNote(id)}</p>}
+          {laneItems(id).map((it) => (<Item title={it.title} summary={it.summary ?? undefined} meta={it.metaText} url={it.url} />))}
         </Lane>
       ))}
     </div>
     <div class="col">
       {newsRight.map((id) => (
         <Lane title={laneTitle(id, id)} context={laneContext(id)}>
-          {laneItems(id).map((it) => (<Item title={it.title} summary={it.summary} meta={it.meta} url={it.url} />))}
+          {laneNote(id) && <p class="meta">{laneNote(id)}</p>}
+          {laneItems(id).map((it) => (<Item title={it.title} summary={it.summary ?? undefined} meta={it.metaText} url={it.url} />))}
         </Lane>
       ))}
     </div>
     <div class="rail">
-      {rail.map((id) => (
+      {railRest.map((id) => (
         <Lane title={laneTitle(id, id)} context={laneContext(id)}>
-          {laneItems(id).map((it) => (<Item title={it.title} summary={it.summary} meta={it.meta} url={it.url} />))}
+          {laneItems(id).map((it) => (<Item title={it.title} summary={it.summary ?? undefined} meta={it.metaText} url={it.url} />))}
+        </Lane>
+      ))}
+      {railReddit.filter((id) => (lanes[id] as LaneBlock | undefined)?.items?.length || laneNote(id)).map((id) => (
+        <Lane title={laneTitle(id, id)} context={laneContext(id)}>
+          {laneNote(id) && <p class="meta">{laneNote(id)}</p>}
+          {laneItems(id).map((it) => (
+            <article>
+              <h3 class="item-title">{it.url ? <a href={it.url}>{it.title}</a> : it.title}</h3>
+              <p class="item-meta meta">{[
+                it.meta?.outlet,
+                it.meta?.comments != null ? `${it.meta.comments} comments` : null,
+                it.meta?.score != null ? `${it.meta.score} points` : null,
+                it.meta?.age,
+              ].filter(Boolean).join(", ")}</p>
+              {it.content && <p class="item-summary">{it.content.length > 600 ? it.content.slice(0, 600) + "…" : it.content}</p>}
+              {(it.comments ?? []).map((c) => (
+                <p class="small" style="padding-top: 8px; padding-left: 12px; border-left: 1px solid var(--line);">
+                  {c.body}{c.score != null && <span class="meta"> — {c.author}, {c.score} points</span>}
+                </p>
+              ))}
+            </article>
+          ))}
         </Lane>
       ))}
     </div>
@@ -124,7 +251,7 @@ const rail = ["releases", "reddit-nba", "reddit-uwaterloo"];
 
   <footer class="footer">
     <p class="meta num">Selected {shownTotal} of {collectedTotal} items. LLM cost today ${cost.usdToday.toFixed(3)} of ${cost.capUsd.toFixed(2)}.{cost.degraded ? " Over budget — running rules-only." : ""}</p>
-    <p class="meta">Phase 0 stub data. Every item on this page is fictional.</p>
+    <p class="meta">Live data. Reddit posts and comments shown in full, unedited.</p>
   </footer>
 </div>
 

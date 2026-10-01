@@ -135,8 +135,9 @@ const MIGRATIONS: string[] = [
   )`,
 ];
 
-export interface RunRow {
-  id: number;
+export type Db = Database.Database;
+
+export interface RunRow {  id: number;
   trigger: string;
   started_at: string;
   finished_at: string | null;
