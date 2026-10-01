@@ -16,7 +16,7 @@ stages:
   select:    { model: bulk,        mode: rules-only }
   summarize: { model: bulk,        mode: rules-only }   # Newsflash canonical summaries cover news
   dedupe:    { model: interactive, mode: rules-only }   # lexical + event-ID identity first
-  digests:   { model: bulk,        mode: off }
+  digests:   { model: bulk,        mode: llm }          # morning digest: ON (user decision 2026-09-30)
   taste:     { model: bulk,        mode: llm }          # TV new-show confidence (experiment 011)
                                                          # rules-only mode = genre/creator/network overlap alone
 

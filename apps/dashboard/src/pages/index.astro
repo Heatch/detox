@@ -1,0 +1,161 @@
+---
+import Lane from "../components/Lane.astro";
+import Item from "../components/Item.astro";
+import "../styles/tokens.css";
+import "@fontsource/newsreader/400.css";
+import "@fontsource/newsreader/500.css";
+import "@fontsource/ibm-plex-sans/400.css";
+import "@fontsource/ibm-plex-sans/500.css";
+import { readSnapshot } from "./api/state.js";
+
+interface LaneBlock {
+  title?: string;
+  items?: { id: string; title: string; summary?: string; meta?: { outlet?: string; age?: string }; url?: string }[];
+  context?: string;
+  locations?: string[];
+  parts?: { name: string; consensus: number | null; sources: (number | null)[] }[];
+}
+
+const { snapshot } = readSnapshot();
+const snap = (snapshot ?? {}) as {
+  generatedAt?: string;
+  runId?: number;
+  laneCounts?: Record<string, { shown: number; collected: number }>;
+  digest?: { text: string; generatedBy: string };
+  lanes?: Record<string, LaneBlock>;
+  cost?: { usdToday: number; capUsd: number; degraded: boolean };
+};
+
+const counts = snap.laneCounts ?? {};
+const shownTotal = Object.values(counts).reduce((a, c) => a + (c.shown ?? 0), 0);
+const collectedTotal = Object.values(counts).reduce((a, c) => a + (c.collected ?? 0), 0);
+const cost = snap.cost ?? { usdToday: 0, capUsd: 0.05, degraded: false };
+const lanes = snap.lanes ?? {};
+const weather = (lanes["weather"] ?? {}) as LaneBlock;
+
+const dateStr = snap.generatedAt
+  ? new Date(snap.generatedAt).toLocaleDateString("en-CA", { weekday: "long", month: "long", day: "numeric", timeZone: "America/Toronto" })
+  : "No snapshot yet";
+
+function laneItems(id: string) {
+  return ((lanes[id] as LaneBlock | undefined)?.items ?? []).map((it) => ({
+    ...it,
+    meta: [it.meta?.outlet, it.meta?.age].filter(Boolean).join(", "),
+  }));
+}
+function laneTitle(id: string, fallback: string) {
+  return ((lanes[id] as LaneBlock | undefined)?.title ?? fallback);
+}
+function laneContext(id: string) {
+  const c = counts[id];
+  return c ? `Selected ${c.shown} of ${c.collected} items.` : undefined;
+}
+
+// Layout (§9.9): masthead → digest → weather → two news columns + rail.
+const newsLeft = ["tech", "science"];
+const newsRight = ["holdings", "sports"];
+const rail = ["releases", "reddit-nba", "reddit-uwaterloo"];
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Detox</title>
+</head>
+<body>
+<div class="page">
+  <header class="masthead">
+    <div class="wordmark">Detox<span class="dot">.</span></div>
+    <div class="masthead-right">
+      <div class="meta num">{dateStr}</div>
+      <div class="meta num" id="status-line">Updated {snap.generatedAt ? new Date(snap.generatedAt).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit", timeZone: "America/Toronto" }) : "never"}.</div>
+    </div>
+  </header>
+
+  <section class="digest">
+    <p class="morning">{snap.digest?.text ?? "No digest yet — run the pipeline."}</p>
+    <div class="digest-controls">
+      <div class="meta num">Selected {shownTotal} of {collectedTotal} items. LLM cost ${cost.usdToday.toFixed(3)} of ${cost.capUsd.toFixed(2)}.</div>
+      <button class="btn btn-primary" id="refresh-btn" type="button">Refresh</button>
+    </div>
+  </section>
+
+  <section class="lane" aria-label="Weather">
+    <h2 class="lane-title">Weather</h2>
+    <p class="lane-context meta">{weather.context ?? ""}</p>
+    <table>
+      <thead><tr><th></th><th>Consensus</th><th>Environment Canada</th><th>Open-Meteo</th><th>MET Norway</th></tr></thead>
+      <tbody>
+        {(weather.parts ?? []).map((p) => (
+          <tr>
+            <td>{p.name}</td>
+            <td class="cons num">{p.consensus ?? "—"}°</td>
+            {(p.sources ?? []).map((s) => (<td class="num">{s ?? "—"}°</td>))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </section>
+
+  <div class="columns">
+    <div class="col">
+      {newsLeft.map((id) => (
+        <Lane title={laneTitle(id, id)} context={laneContext(id)}>
+          {laneItems(id).map((it) => (<Item title={it.title} summary={it.summary} meta={it.meta} url={it.url} />))}
+        </Lane>
+      ))}
+    </div>
+    <div class="col">
+      {newsRight.map((id) => (
+        <Lane title={laneTitle(id, id)} context={laneContext(id)}>
+          {laneItems(id).map((it) => (<Item title={it.title} summary={it.summary} meta={it.meta} url={it.url} />))}
+        </Lane>
+      ))}
+    </div>
+    <div class="rail">
+      {rail.map((id) => (
+        <Lane title={laneTitle(id, id)} context={laneContext(id)}>
+          {laneItems(id).map((it) => (<Item title={it.title} summary={it.summary} meta={it.meta} url={it.url} />))}
+        </Lane>
+      ))}
+    </div>
+  </div>
+
+  <footer class="footer">
+    <p class="meta num">Selected {shownTotal} of {collectedTotal} items. LLM cost today ${cost.usdToday.toFixed(3)} of ${cost.capUsd.toFixed(2)}.{cost.degraded ? " Over budget — running rules-only." : ""}</p>
+    <p class="meta">Phase 0 stub data. Every item on this page is fictional.</p>
+  </footer>
+</div>
+
+<script>
+  // Stale-on-open (§4, rule 1) + manual refresh (§4, rule 3). Renders the cached
+  // snapshot instantly; a background refresh never blanks the page.
+  (async () => {
+    const status = document.getElementById("status-line");
+    const btn = document.getElementById("refresh-btn");
+    const say = (t) => { if (status) status.textContent = t; };
+    const poll = async () => (await (await fetch("/api/state")).json());
+    let first;
+    try { first = await poll(); } catch { say("Dashboard unreachable."); return; }
+    const snapId = first?.snapshot?.runId ?? null;
+    const fmt = (iso) => new Date(iso).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit", timeZone: "America/Toronto" });
+    if (first.lastSuccessfulRun) say(`Updated ${fmt(first.lastSuccessfulRun)}.`);
+    async function refresh() {
+      say("Refreshing. Showing the last snapshot meanwhile.");
+      try { await fetch("/api/refresh", { method: "POST" }); } catch { say("Refresh failed to start."); return; }
+      for (let i = 0; i < 30; i++) {
+        await new Promise((r) => setTimeout(r, 4000));
+        try {
+          const s = await poll();
+          if (!s.refreshing && (s?.snapshot?.runId ?? null) !== snapId) { location.reload(); return; }
+        } catch { /* keep polling */ }
+      }
+      say("Still refreshing — check back shortly.");
+    }
+    if (btn) btn.addEventListener("click", refresh);
+    if (first.stale) void refresh();
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "name": "@detox/pipeline",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "run-pipeline": "tsx src/cli.ts run",
+    "dev": "tsx watch src/cli.ts run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@detox/core": "workspace:*",
+    "@detox/adapters": "workspace:*",
+    "@detox/llm": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "@types/node": "^22.7.0"
+  }
+}

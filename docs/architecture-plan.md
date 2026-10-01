@@ -220,7 +220,7 @@ Draft schema; expect it to evolve. Migrations via Drizzle Kit or Kysely (either 
 |---|---|
 | `runs` | One row per pipeline run: trigger, start/end, status, error, tokens in/out, estimated USD. |
 | `raw_items` | Verbatim payloads per adapter fetch. Provenance and reprocessing without refetching. |
-| `items` | Normalized `CanonicalItem` rows. |
+| `items` | Normalized `CanonicalItem` rows, including `content` (full Reddit post text). |
 | `clusters`, `cluster_items` | Dedupe clusters; a headline seen by five outlets is one cluster of five items. |
 | `selections` | Per run, per lane: item picked or cut, rule score, LLM score, rationale, summary. Cut rows are the audit trail. |
 | `weather_forecasts` | Per run, per source, per location: issued time, hourly + day/night temperatures, precip (mm + likelihood), wind (speed/direction/gust), humidity, context text (EC `textSummary`), raw payload. |
@@ -241,9 +241,9 @@ Snapshots for the UI are written as plain JSON files (`data/snapshots/<date>.jso
 
 1. **Collect.** Adapters run concurrently under per-source rate limits, honoring ETags and conditional requests where offered. Windows: news and Reddit look back 24–48h; entertainment looks forward 30–60 days; sports forward 14 days and back 3; holdings look forward 30 days for earnings dates and back 7 for results; weather is "now" plus 7 days.
 2. **Normalize.** Canonical URLs (strip tracking params), normalized titles, timezone-aware timestamps (America/Toronto), outlet names, tier lookup from `sources.yaml`.
-3. **Dedupe.** Newsflash events arrive pre-clustered with stable IDs (`nf:<event_id>`), so news-lane dedupe collapses to identity plus lane assignment — the same event ID surfacing in two lane queries is free cross-lane dedupe. For everything else, cheap first: canonical URL equality, normalized-title equality, SimHash over title+dek. Then, only for near-misses, optional embedding similarity to group clusters. Finally one batched LLM call reviews ambiguous cluster pairs and returns merge/split decisions. The merge decision is stored, so identical stories cost nothing tomorrow (content-hash cache).
+3. **Dedupe.** Newsflash events arrive pre-clustered with stable IDs (`nf:<event_id>`), so news-lane dedupe collapses to identity plus lane assignment — the same event ID surfacing in two lane queries is free cross-lane dedupe. For everything else, cheap first: canonical URL equality, normalized-title equality, SimHash over title+dek. Then, only for near-misses, optional embedding similarity to group clusters. LLM merge/split review of ambiguous cluster pairs is **deferred to the backburner** (user decision 2026-09-30) — revisit only if the gold set shows lexical dedupe failing. The merge decision is stored, so identical stories cost nothing tomorrow (content-hash cache).
 4. **Select.** Rule score first: recency decay, source tier, keyword and entity hits from `interests.yaml`, engagement percentile, cluster size (many outlets covering it is a signal), negative-filter penalty. For news lanes this is the whole selection step: corroboration threshold + relevance floor + negatives + recency sort, no LLM (see experiment 001). For other lanes, one batched LLM call re-ranks the top ~25 candidates and returns 3–5 picks with a short rationale each. The rule score and LLM score are both stored so disagreements are visible.
-5. **Summarize.** One line per selected item (≤ 25 words), naming the source and stating uncertainty plainly. News lanes use the Newsflash canonical summary (cleaned of entities and emoji, with a fallback to the first corroborating article's dek) — no LLM. Optional one-paragraph lane digest, off by default until its value is proven. Also one batched call.
+5. **Summarize.** One line per selected item (≤ 25 words), naming the source and stating uncertainty plainly. News lanes use the Newsflash canonical summary (cleaned of entities and emoji, with a fallback to the first corroborating article's dek) — no LLM. Reddit items summarize over **title + full post text (`selftext`) + top comments** via the LLM `summarize` stage (user decision 2026-09-30); link posts fall back to title + comments. The morning digest runs as its own `digests` stage (**ON** — the two-sentence line for the dashboard top). Also one batched call per stage.
 6. **Assemble.** Build the snapshot: lanes, items, rationales, transparency counts (collected, merged, shown, cut), weather consensus (median of sources, arithmetic — no LLM), sports blocks, cost totals.
 
 **Budget guard.** Before each stage, estimate tokens; track today's spend in `llm_calls` against `daily_cap_usd` (default 0.05). Over cap → summary and re-rank stages switch to rules-only and the footer says so. Under the Gemini free tier the estimate is still tracked, so switching to a paid model later needs no code change.
@@ -259,9 +259,9 @@ Snapshots for the UI are written as plain JSON files (`data/snapshots/<date>.jso
 ```yaml
 stages:
   select:      { model: gemini-3.8-flash, mode: llm }
-  summarize:   { model: gemini-3.8-flash, mode: llm }
+  summarize:   { model: gemini-3.8-flash, mode: llm }   # Reddit override stays llm (title + selftext + comments)
   dedupe:      { model: gpt-5.6-luna,     mode: llm }
-  digests:     { model: gemini-3.8-flash, mode: off }
+  digests:     { model: gemini-3.8-flash, mode: llm }   # morning digest: ON (user decision 2026-09-30)
 ```
 
 News lanes override these defaults per experiment 001: `select` and
@@ -399,7 +399,7 @@ Dead end recorded: `trending/tv/week` tracks viewing, not anticipation (0/20 una
 
 **Shows.** Per subreddit: 3–5 posts with title, a one-line summary where the thread is substantive, and tabular score and comment counts. Game threads and spoilers filtered by config. Links go to the thread.
 
-**Flows.** Retrieval validated (experiment 005): official Reddit API with app-only OAuth (client credentials, token cached 24 h), `GET /r/{sub}/top?t={window}&limit={n}&raw_json=1` plus `GET /comments/{id}?sort=top&depth=1&limit={top_comments_n}` per kept post for summary input, with `subreddits`, `top_n`, `top_comments_n`, `time_window`, and `exclude_title_patterns` all read from `config/interests.yaml`. Reddit's own `top` sort is by upvotes. `score`/`num_comments`/`upvote_ratio`/flair feed rule scoring; flair is also a filter dimension (Meme, game threads). Quirks to handle: vote fuzzing (scores aren't stable keys), per-subreddit score scales (14k vs 69 — no global thresholds), comment scores can be negative or outscore the post, `kind: t1` on the listing wrapper, UTF-8 flair. Summaries are LLM-written over title + top comments in one batched call; low-comment posts skip summarization entirely and just show the title. Adding r/toronto is a config edit.
+**Flows.** Retrieval validated (experiment 005): official Reddit API with app-only OAuth (client credentials, token cached 24 h), `GET /r/{sub}/top?t={window}&limit={n}&raw_json=1` plus `GET /comments/{id}?sort=top&depth=1&limit={top_comments_n}` per kept post for summary input, with `subreddits`, `top_n`, `top_comments_n`, `time_window`, and `exclude_title_patterns` all read from `config/interests.yaml`. Retrieval fetches **full post content (`selftext`) for text posts** alongside title + top comments — stored in `items.content`; link posts carry title + comments only. The `summarize` stage for Reddit runs **llm** over title + selftext + top comments, which is also the input the stub pipeline fakes in Phase 0. Reddit's own `top` sort is by upvotes. `score`/`num_comments`/`upvote_ratio`/flair feed rule scoring; flair is also a filter dimension (Meme, game threads). Quirks to handle: vote fuzzing (scores aren't stable keys), per-subreddit score scales (14k vs 69 — no global thresholds), comment scores can be negative or outscore the post, `kind: t1` on the listing wrapper, UTF-8 flair. Summaries are LLM-written over title + top comments in one batched call; low-comment posts skip summarization entirely and just show the title. Adding r/toronto is a config edit.
 
 **Candidates:**
 

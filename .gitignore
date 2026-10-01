@@ -1,3 +1,6 @@
 .env
 data/
 config/holdings.md
+node_modules
+dist/
+.astro/

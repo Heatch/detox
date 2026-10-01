@@ -1,0 +1,14 @@
+---
+interface Props {
+  title: string;
+  context?: string;
+}
+const { title, context } = Astro.props;
+---
+<section class="lane">
+  <h2 class="lane-title">{title}</h2>
+  {context && <p class="lane-context meta">{context}</p>}
+  <div class="items">
+    <slot />
+  </div>
+</section>
