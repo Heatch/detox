@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "pnpm --parallel --filter @detox/dashboard --filter @detox/pipeline dev",
     "pipeline": "pnpm --filter @detox/pipeline run-pipeline",
+    "eval": "pnpm --filter @detox/pipeline eval",
     "start": "pnpm --filter @detox/dashboard start",
     "build": "pnpm --recursive build",
     "typecheck": "pnpm --recursive typecheck",

@@ -129,6 +129,14 @@ const MIGRATIONS: string[] = [
     item_id TEXT NOT NULL,
     value INTEGER NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS llm_cache (
+    key TEXT PRIMARY KEY,
+    stage TEXT NOT NULL,
+    output_json TEXT NOT NULL,
+    tokens_in INTEGER NOT NULL DEFAULT 0,
+    tokens_out INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS settings_snapshot (
     run_id INTEGER PRIMARY KEY,
     payload_json TEXT NOT NULL
@@ -184,18 +192,64 @@ export function lastSuccessfulRun(db: Database.Database): RunRow | undefined {
     .get() as RunRow | undefined;
 }
 
-export function spendTodayUsd(db: Database.Database, dayPrefix: string): number {
-  const row = db
-    .prepare("SELECT COALESCE(SUM(est_cost_usd), 0) AS total FROM llm_calls WHERE run_id IN (SELECT id FROM runs WHERE started_at LIKE ?)")
-    .get(dayPrefix + "%") as { total: number };
+export function spendTodayUsd(db: Database.Database, dayPrefix: string, provider?: string): number {
+  const row = provider
+    ? (db
+        .prepare("SELECT COALESCE(SUM(est_cost_usd), 0) AS total FROM llm_calls WHERE provider = ? AND run_id IN (SELECT id FROM runs WHERE started_at LIKE ?)")
+        .get(provider, dayPrefix + "%") as { total: number })
+    : (db
+        .prepare("SELECT COALESCE(SUM(est_cost_usd), 0) AS total FROM llm_calls WHERE run_id IN (SELECT id FROM runs WHERE started_at LIKE ?)")
+        .get(dayPrefix + "%") as { total: number });
   return row.total;
 }
 
-export function callsToday(db: Database.Database, dayPrefix: string): number {
-  const row = db
-    .prepare("SELECT COUNT(*) AS n FROM llm_calls WHERE run_id IN (SELECT id FROM runs WHERE started_at LIKE ?)")
-    .get(dayPrefix + "%") as { n: number };
+export function callsToday(db: Database.Database, dayPrefix: string, provider?: string): number {
+  const row = provider
+    ? (db
+        .prepare("SELECT COUNT(*) AS n FROM llm_calls WHERE provider = ? AND cache_hit = 0 AND run_id IN (SELECT id FROM runs WHERE started_at LIKE ?)")
+        .get(provider, dayPrefix + "%") as { n: number })
+    : (db
+        .prepare("SELECT COUNT(*) AS n FROM llm_calls WHERE cache_hit = 0 AND run_id IN (SELECT id FROM runs WHERE started_at LIKE ?)")
+        .get(dayPrefix + "%") as { n: number });
   return row.n;
+}
+
+// LLM output cache: hash(stage version + item content) → stored output.
+// Unchanged content is never re-sent to a model. Cached rows count toward
+// neither spend nor the request caps (callsToday excludes cache_hit rows).
+export interface LlmCacheRow {
+  output_json: string;
+  tokens_in: number;
+  tokens_out: number;
+  created_at: string;
+}
+
+export function getLlmCache(db: Database.Database, key: string, ttlDays: number): LlmCacheRow | undefined {
+  const row = db.prepare("SELECT output_json, tokens_in, tokens_out, created_at FROM llm_cache WHERE key = ?").get(key) as
+    | LlmCacheRow
+    | undefined;
+  if (!row) return undefined;
+  const ageMs = Date.now() - Date.parse(row.created_at);
+  if (ageMs > ttlDays * 86_400_000) {
+    db.prepare("DELETE FROM llm_cache WHERE key = ?").run(key);
+    return undefined;
+  }
+  return row;
+}
+
+export function setLlmCache(
+  db: Database.Database,
+  key: string,
+  stage: string,
+  outputJson: string,
+  tokensIn: number,
+  tokensOut: number,
+  createdAt: string
+): void {
+  db.prepare(
+    `INSERT OR REPLACE INTO llm_cache (key, stage, output_json, tokens_in, tokens_out, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(key, stage, outputJson, tokensIn, tokensOut, createdAt);
 }
 
 export function recordLlmCall(

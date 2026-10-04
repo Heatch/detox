@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "astro dev --port 4321 --host 127.0.0.1",
     "build": "astro build",
-    "start": "node ./scripts/start.mjs",
+    "start": "node --import tsx ./scripts/start.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
@@ -21,6 +21,7 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.0",
     "@types/node": "^22.7.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.6.0"
   }
 }

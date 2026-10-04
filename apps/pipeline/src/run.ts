@@ -1,10 +1,11 @@
 import {
+  callsToday,
   finishRun,
   insertRun,
   lastSuccessfulRun,
   loadConfig,
   openDb,
-  recordLlmCall,
+  spendTodayUsd,
   type CanonicalItem,
   type Db,
   type LaneId,
@@ -13,7 +14,14 @@ import {
   type Trigger,
 } from "@detox/core";
 import { createAdapters } from "@detox/adapters";
-import { templateDigest } from "@detox/llm";
+import {
+  buildBudget,
+  buildProviders,
+  providerRef,
+  resolveStageTarget,
+  runDigestStage,
+  type DigestInput,
+} from "@detox/llm";
 import { buildStubSnapshot, writeSnapshot } from "./fake.js";
 import { ageString, normalizeAll } from "./normalize.js";
 import { dedupe, scoreItems, selectTop } from "./select.js";
@@ -69,9 +77,11 @@ interface LaneError {
 
 /**
  * runPipeline — one entry point, three triggers (§4).
- * Phase 1: real adapters for weather/tech/reddit; stub snapshot fills every
+ * Phase 2: real adapters for weather/tech/reddit; stub snapshot fills every
  * lane without an adapter yet. Stages: collect → normalize → dedupe
- * (identity/lexical) → select (rules) → summarize (rules) → assemble.
+ * (identity/lexical) → select (rules) → digest (LLM with template fallback)
+ * → assemble. The taste stage has no live candidates until the TMDB adapter
+ * lands (Phase 3); it is exercised via `pnpm eval` on hand-fed gold rows.
  */
 export async function runPipeline(trigger: Trigger, root = defaultRoot()): Promise<RunResult> {
   const config = loadConfig(root);
@@ -213,17 +223,47 @@ export async function runPipeline(trigger: Trigger, root = defaultRoot()): Promi
       pickedByLane.set(lane, picked);
     }
 
-    // 5. summarize (rules only) + templated digest from real top items
+    // 5. digest — LLM stage (mode llm) with template fallback. Gemini first
+    // (free), Luna on throttle/failure; over caps → template + footer says so.
+    const dayPrefix = startedAt.slice(0, 10);
+    const budget = buildBudget(db, dayPrefix, config.models);
+    const providers = buildProviders(config.env, config.models);
+    const cacheTtlDays = config.models.budget.cache?.ttl_days ?? 30;
+    const digestTarget = resolveStageTarget(config.models, "digests");
+    const fallbackProviderId =
+      digestTarget.providerId === "google-ai-studio" ? "backboard" : "google-ai-studio";
+    const fallbackModel =
+      fallbackProviderId === "google-ai-studio" ? config.models.models.bulk : config.models.models.interactive;
+    const digestRefs = [digestTarget.providerId, fallbackProviderId]
+      .map((pid) =>
+        providerRef(providers, budget, pid, pid === digestTarget.providerId ? digestTarget.model : fallbackModel)
+      )
+      .filter((r) => r !== undefined);
     const techTop = pickedByLane.get("tech")?.[0];
     const toronto = weatherBlock.locations.find((l) => l.id === weatherBlock.defaultLocation);
     const afternoon = toronto?.parts.find((p) => p.name.toLowerCase() === "afternoon");
-    const digestText = templateDigest({
+    const shownTotal = [...pickedByLane.values()].reduce((a, p) => a + p.length, 0);
+    const collectedTotal = [...collectedByLane.values()].reduce((a, n) => a + n, 0);
+    const digestInput: DigestInput = {
       weather:
         afternoon?.consensus != null
-          ? `${toronto!.name} reaches around ${afternoon.consensus}° this afternoon.`
+          ? `${toronto!.name} reaches around ${Math.round(afternoon.consensus)}° this afternoon.`
           : undefined,
       urgent: techTop ? `Top story: ${techTop.title}.` : undefined,
+      counts: `Selected ${shownTotal} of ${collectedTotal} items across ${pickedByLane.size} lanes.`,
+    };
+    const digest = await runDigestStage({
+      db,
+      runId,
+      input: digestInput,
+      mode: config.models.stages.digests.mode,
+      cacheTtlDays,
+      refs: digestRefs,
+      log: ctx.log,
     });
+    if (digest.generatedBy === "template" && digest.reason) {
+      ctx.log(`digests degraded to template: ${digest.reason}`);
+    }
 
     // 6. assemble — stub base for lanes without adapters yet, real data over it
     const snapshot = buildStubSnapshot(runId);
@@ -288,8 +328,45 @@ export async function runPipeline(trigger: Trigger, root = defaultRoot()): Promi
       laneCounts[lane] = { shown: picked.length, collected: collectedByLane.get(lane) ?? picked.length };
     }
 
-    snapshot.digest = { text: digestText, generatedBy: "template" };
-    snapshot.cost = { usdToday: 0, capUsd: config.models.budget.daily_cap_usd, degraded: false };
+    snapshot.digest = { text: digest.text, generatedBy: digest.generatedBy };
+    // Real usage (§8, experiment 013): Luna dollars + per-provider requests.
+    // usdToday is Backboard dollars ONLY — Gemini costs $0 and is reported as
+    // requests against its 30 RPD cap.
+    const lunaSpend = spendTodayUsd(db, dayPrefix, "backboard");
+    const providersUsage: Record<string, { requestsToday: number; requestsCap: number; spentUsd: number }> = {};
+    for (const [pid, p] of Object.entries(config.models.providers)) {
+      providersUsage[pid] = {
+        requestsToday: callsToday(db, dayPrefix, pid),
+        requestsCap: p.requests_per_day,
+        spentUsd: Math.round(spendTodayUsd(db, dayPrefix, pid) * 10_000) / 10_000,
+      };
+    }
+    snapshot.cost = {
+      usdToday: Math.round(lunaSpend * 10_000) / 10_000,
+      capUsd: config.models.budget.daily_cap_usd,
+      degraded: digest.generatedBy === "template" && config.models.stages.digests.mode === "llm",
+      providers: providersUsage,
+    };
+    // Audit trail (§9.8): cut items with scores + reasons, capped per lane.
+    const titleOf = (itemId: string): string | undefined =>
+      (db.prepare("SELECT title FROM items WHERE id = ?").get(itemId) as { title: string } | undefined)?.title;
+    const discarded: Record<string, { id: string; title: string; reason: string; ruleScore: number | null }[]> = {};
+    for (const lane of pickedByLane.keys()) {
+      const cuts = db
+        .prepare(
+          "SELECT item_id, reason, rule_score FROM selections WHERE run_id = ? AND lane = ? AND picked = 0 ORDER BY rule_score DESC LIMIT 8"
+        )
+        .all(runId, lane) as { item_id: string; reason: string | null; rule_score: number | null }[];
+      if (cuts.length > 0) {
+        discarded[lane] = cuts.map((c) => ({
+          id: c.item_id,
+          title: titleOf(c.item_id) ?? c.item_id,
+          reason: c.reason ?? "cut",
+          ruleScore: c.rule_score,
+        }));
+      }
+    }
+    snapshot.discarded = discarded;
     (snapshot as unknown as { laneStatus: Record<string, { ok: boolean; note: string | null }> }).laneStatus =
       Object.fromEntries(
         [...new Set([...laneStatusKeys(), ...errors.map((e) => e.key)])].map((key) => {
@@ -297,14 +374,6 @@ export async function runPipeline(trigger: Trigger, root = defaultRoot()): Promi
           return [key, err ? { ok: false, note: err.message } : { ok: true, note: null }];
         })
       );
-
-    recordLlmCall(db, {
-      run_id: runId,
-      stage: "digests",
-      model: config.models.models.bulk,
-      provider: config.models.router.provider,
-      est_cost_usd: 0,
-    });
 
     const snapshotPath = writeSnapshot(root + "/data", snapshot);
     db.prepare("INSERT INTO settings_snapshot (run_id, payload_json) VALUES (?, ?)").run(

@@ -57,13 +57,26 @@ const snap = (snapshot ?? {}) as {
   digest?: { text: string; generatedBy: string };
   laneStatus?: Record<string, { ok: boolean; note: string | null }>;
   lanes?: Record<string, LaneBlock>;
-  cost?: { usdToday: number; capUsd: number; degraded: boolean };
+  discarded?: Record<string, { id: string; title: string; reason: string; ruleScore?: number | null }[]>;
+  cost?: {
+    usdToday: number;
+    capUsd: number;
+    degraded: boolean;
+    providers?: Record<string, { requestsToday: number; requestsCap: number; spentUsd: number }>;
+  };
 };
 
 const counts = snap.laneCounts ?? {};
 const shownTotal = Object.values(counts).reduce((a, c) => a + (c.shown ?? 0), 0);
 const collectedTotal = Object.values(counts).reduce((a, c) => a + (c.collected ?? 0), 0);
 const cost = snap.cost ?? { usdToday: 0, capUsd: 0.05, degraded: false };
+const geminiUsage = snap.cost?.providers?.["google-ai-studio"];
+const usageLine =
+  `LLM cost today $${cost.usdToday.toFixed(3)} of $${cost.capUsd.toFixed(2)} (Luna)` +
+  (geminiUsage ? `, Gemini ${geminiUsage.requestsToday} of ${geminiUsage.requestsCap} requests` : "") +
+  ".";
+const discarded = snap.discarded ?? {};
+const discardedLanes = Object.entries(discarded).filter(([, cuts]) => cuts.length > 0);
 const lanes = snap.lanes ?? {};
 const laneStatus = snap.laneStatus ?? {};
 const weather = (lanes["weather"] ?? {}) as LaneBlock;
@@ -118,7 +131,7 @@ const SOURCE_NAMES: Record<string, string> = { envcan: "Environment Canada", ope
   <section class="digest">
     <p class="morning">{snap.digest?.text ?? "No digest yet — run the pipeline."}</p>
     <div class="digest-controls">
-      <div class="meta num">Selected {shownTotal} of {collectedTotal} items. LLM cost ${cost.usdToday.toFixed(3)} of ${cost.capUsd.toFixed(2)}.</div>
+      <div class="meta num">Selected {shownTotal} of {collectedTotal} items. {usageLine}</div>
       <button class="btn btn-primary" id="refresh-btn" type="button">Refresh</button>
     </div>
   </section>
@@ -250,7 +263,20 @@ const SOURCE_NAMES: Record<string, string> = { envcan: "Environment Canada", ope
   </div>
 
   <footer class="footer">
-    <p class="meta num">Selected {shownTotal} of {collectedTotal} items. LLM cost today ${cost.usdToday.toFixed(3)} of ${cost.capUsd.toFixed(2)}.{cost.degraded ? " Over budget — running rules-only." : ""}</p>
+    <p class="meta num">Selected {shownTotal} of {collectedTotal} items. {usageLine}{cost.degraded ? " Over budget — running rules-only." : ""}</p>
+    {discardedLanes.length > 0 && (
+      <details>
+        <summary class="meta">Discarded today</summary>
+        {discardedLanes.map(([lane, cuts]) => (
+          <div>
+            <p class="meta">{laneTitle(lane, lane)} — {cuts.length} cut</p>
+            {cuts.map((c) => (
+              <p class="meta">{c.title} — {c.reason}{c.ruleScore != null ? ` (relevance ${c.ruleScore})` : ""}</p>
+            ))}
+          </div>
+        ))}
+      </details>
+    )}
     <p class="meta">Live data. Reddit posts and comments shown in full, unedited.</p>
   </footer>
 </div>

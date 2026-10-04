@@ -12,6 +12,12 @@ export default defineConfig({
   vite: {
     // better-sqlite3 is CJS with __filename references — it must load at
     // runtime via require(), never bundled into the ESM server chunk.
-    ssr: { external: ["better-sqlite3"] },
+    // The @detox/* workspace packages ship raw TypeScript with .js-style
+    // specifiers, so Vite has to own their resolution instead of handing them
+    // to Node, which would look for run.js on disk and find nothing.
+    ssr: {
+      external: ["better-sqlite3"],
+      noExternal: ["@detox/core", "@detox/adapters", "@detox/llm", "@detox/pipeline"],
+    },
   },
 });

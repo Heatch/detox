@@ -1,4 +1,4 @@
-import type { Budget, LlmMode } from "./types.js";
+import type { LlmMode, ProviderPool } from "./types.js";
 
 export interface GuardDecision {
   allowed: boolean;
@@ -6,27 +6,28 @@ export interface GuardDecision {
   reason?: string;
 }
 
-// Budget guard: before each stage, check dollars AND request count.
-// Over cap → rules-only degradation, never a blocked run.
+// Budget guard: before each stage, check the pool that binds for that
+// provider — dollars for Luna/Backboard, request count for Gemini
+// (experiment 013). Over cap → rules-only degradation, never a blocked run.
 export function checkBudget(
-  budget: Budget,
+  pool: ProviderPool,
   stageMode: LlmMode,
   estimatedCostUsd: number
 ): GuardDecision {
   if (stageMode === "off") return { allowed: false, degraded: true, reason: "stage off" };
   if (stageMode === "rules-only") return { allowed: false, degraded: true, reason: "stage rules-only" };
-  if (budget.spentUsdToday + estimatedCostUsd > budget.dailyCapUsd) {
+  if (pool.spentUsdToday + estimatedCostUsd > pool.dailyCapUsd) {
     return {
       allowed: false,
       degraded: true,
-      reason: `over daily cap $${budget.dailyCapUsd} (spent $${budget.spentUsdToday.toFixed(4)})`,
+      reason: `over daily cap $${pool.dailyCapUsd} (spent $${pool.spentUsdToday.toFixed(4)})`,
     };
   }
-  if (budget.requestsToday >= budget.requestsPerDayCap) {
+  if (pool.requestsToday >= pool.requestsPerDayCap) {
     return {
       allowed: false,
       degraded: true,
-      reason: `over daily request cap ${budget.requestsPerDayCap}`,
+      reason: `over daily request cap ${pool.requestsPerDayCap}`,
     };
   }
   return { allowed: true, degraded: false };

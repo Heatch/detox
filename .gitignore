@@ -1,6 +1,7 @@
 .env
 data/
-config/holdings.md
+config/
+evals/
 node_modules
 dist/
 .astro/

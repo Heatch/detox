@@ -23,9 +23,9 @@ Recorded so future changes can tell "deliberate" from "drifted".
 | Frontend | Astro. Desktop-first. Dark only. |
 | Language | TypeScript everywhere, pipeline included. |
 | Storage | SQLite. |
-| LLM access | Router/provider-agnostic layer (Backboard.io as the router; any OpenAI-compatible provider behind it). |
-| Model strategy | Gemini 3.8 Flash free tier for bulk daily work (5 requests/min — batch hard), GPT-5.6 Luna for interactive and fallback work. Per-stage model config, swappable. |
-| LLM spend | Target ≈ $0.05/day soft cap, enforced by a budget guard; the pipeline degrades to rules-only rather than overspending. |
+| LLM access | Two providers, pluggable like adapters (experiment 013): Google AI Studio for free bulk work, Backboard for paid fallback. Neither speaks a generic OpenAI-compatible contract. |
+| Model strategy | Gemini 3.8 Flash free tier for bulk daily work (5 requests/min, 30 requests/day — batch hard), GPT-5.6 Luna via Backboard for throttle fallback and interactive work. Per-stage model config, swappable. |
+| LLM spend | Target ≈ $0.05/day on Luna/Backboard (Gemini costs $0 and is gated on requests instead), enforced by a per-provider budget guard; the pipeline degrades to rules-only rather than overspending or over-calling. |
 | LLM role | Not fixed. Every LLM stage is pluggable per feature; rules-first, LLM-second everywhere so each stage can be enabled, disabled, or swapped independently. |
 | Curation | Small number of strong, well-sourced items. Selection budget of 3–5 items per topic lane. Everything discarded is retained and reviewable, never silently lost. |
 | Personalization | `config/interests.yaml` — keywords, topics, entities, teams, watchlist, negative filters. |
@@ -50,7 +50,7 @@ Deliberately left open: every other specific API/SDK choice, LLM prompt design, 
 
 ## 2. Design principles
 
-1. **Local-first and yours.** Data, keys, and history live on your machine in one SQLite file. Nothing phones home except the source APIs and the LLM router.
+1. **Local-first and yours.** Data, keys, and history live on your machine in one SQLite file. Nothing phones home except the source APIs and the two LLM providers.
 2. **Morning-first.** The page answers "what should I know today" in one screenful per lane. Depth exists below, not in front.
 3. **Curation over volume.** A small set of strong, well-sourced items beats a complete feed. Selection is a budget, not a filter that loses data.
 4. **Rules first, LLM second.** Deterministic code does scoring, sorting, dedupe candidates, and weather consensus. The LLM adds judgment where rules are weak. Every LLM stage can be turned off and the dashboard still works.
@@ -246,15 +246,15 @@ Snapshots for the UI are written as plain JSON files (`data/snapshots/<date>.jso
 5. **Summarize.** One line per selected item (≤ 25 words), naming the source and stating uncertainty plainly. News lanes use the Newsflash canonical summary (cleaned of entities and emoji, with a fallback to the first corroborating article's dek) — no LLM. Reddit items summarize over **title + full post text (`selftext`) + top comments** via the LLM `summarize` stage (user decision 2026-09-30); link posts fall back to title + comments. The morning digest runs as its own `digests` stage (**ON** — the two-sentence line for the dashboard top). Also one batched call per stage.
 6. **Assemble.** Build the snapshot: lanes, items, rationales, transparency counts (collected, merged, shown, cut), weather consensus (median of sources, arithmetic — no LLM), sports blocks, cost totals.
 
-**Budget guard.** Before each stage, estimate tokens; track today's spend in `llm_calls` against `daily_cap_usd` (default 0.05). Over cap → summary and re-rank stages switch to rules-only and the footer says so. Under the Gemini free tier the estimate is still tracked, so switching to a paid model later needs no code change.
+**Budget guard.** Before each stage, check the pool that binds for its provider: dollars for Luna/Backboard (`daily_cap_usd`, default 0.05), request count for Gemini (30/day, 5/min). Track real spend and real request counts in `llm_calls`. Over either cap → that provider refuses, the stage falls through to the other provider, and only then to rules-only; the footer says which. Cached rows count toward neither cap.
 
-**Caching.** `hash(stage version + item content)` → stored output. Unchanged content is never re-sent to a model. This is what makes the 5 requests/min limit painless.
+**Caching.** `hash(stage version + item content)` → stored output in `llm_cache` (30-day TTL). Unchanged content is never re-sent to a model. This is what makes the 5 requests/min and 30 requests/day limits painless.
 
 ---
 
 ## 8. LLM layer
 
-**Routing.** All calls go through one `LlmClient` that speaks the router's OpenAI-compatible API (Backboard.io today, any compatible endpoint by changing a base URL and key). `config/models.yaml` maps stages to models:
+**Providers.** One `LlmProvider` interface, two transports (experiment 013) — Google AI Studio speaks an OpenAI-style shim (`POST {base}/chat/completions`, Bearer key), Backboard speaks its own threads API (`POST {base}/threads/messages`, `X-API-Key` header, per-message `llm_provider` + `model_name`). `config/models.yaml` maps stages to models and models to providers:
 
 ```yaml
 stages:
@@ -271,21 +271,21 @@ tiebreaks.
 
 **Model guidance (checked against published pricing, September 2026):**
 
-- **Gemini 3.8 Flash (free tier)** — input and output free of charge, capped at 5 requests/min and 1M-token input context. Thinking tokens bill as output only on paid tiers. Perfect for the daily bulk if calls are batched and the pipeline is patient. Caveats: the free tier's terms can change, introductory paid pricing ($0.75/$3.75 per 1M) doubles on 2027-01-01, and 5 RPM shapes the pipeline more than the price does.
-- **GPT-5.6 Luna** — $0.20/$1.20 per 1M standard, $0.10/$0.60 batch, $0.02 cached input, 500 RPM, ~1M-token context. At those rates the $0.05/day target buys on the order of 250K input plus 40K output tokens uncached, and far more with cache hits. Ideal for interactive calls, retries when Gemini throttles, and the dedupe reviewer.
+- **Gemini 3.8 Flash (free tier)** — input and output free of charge, capped at 5 requests/min, 30 requests/day, and 1M-token input context. Thinking tokens bill as output only on paid tiers. Perfect for the daily bulk if calls are batched and the pipeline is patient. Caveats: the free tier's terms can change, introductory paid pricing ($0.75/$3.75 per 1M) doubles on 2027-01-01, and 30 RPD shapes the pipeline more than the price does — two calls per run is a ~15-run daily ceiling shared with evals.
+- **GPT-5.6 Luna (via Backboard, provider `openai`)** — $0.20/$1.20 per 1M (confirmed live on the Backboard model library), ~1M-token context, JSON output supported. At those rates the $0.05/day target buys on the order of 250K input plus 40K output tokens uncached, and far more with cache hits. Ideal for throttle fallback when Gemini starves, interactive calls, and retries. A starved Gemini falls through to Luna by design — evals share the same pools, so a big eval day spends real cents.
 
-**Working the 5 RPM limit:**
+**Working the 5 RPM / 30 RPD limits:**
 
 - Batch 20–60 items per call (both models have ~1M context; a lane's candidates fit easily).
-- Token-bucket queue at 4 requests/min with exponential backoff; throttled work is queued and resumed, never restarted.
+- Token-bucket queue at 4 requests/min with exponential backoff; throttled work is queued and resumed, never restarted. 503s from Gemini are transient — retry, then fall through to Luna.
 - Route interactive and on-demand paths to Luna so the page never waits on the throttle.
-- Cache aggressively (content hash + prompt version) so a second run over the same items costs zero calls.
+- Cache aggressively (content hash + prompt version, `llm_cache`, 30-day TTL) so a second run over the same items costs zero calls and zero requests against the daily cap.
 
 **Structured outputs.** Every stage returns JSON validated by its zod schema; invalid output is retried once with the validation error, then falls back to rules-only for that lane.
 
 **Eval harness.** `evals/gold.jsonl` holds labeled items (relevant/not, duplicate-of, summary quality). `pnpm eval` runs the current prompts against it and reports precision@k for selection, dedupe accuracy, summary drift, and cost per run. Prompt changes run the harness before they land. This is how "does the LLM actually know what's relevant to me" gets answered with data instead of vibes.
 
-**Degradation ladder.** Router unreachable → rules-only selection using source deks as summaries. One model throttled → retry queue, then swap to the fallback model for that stage. Over budget → summaries off, selection rules-only. The dashboard always renders; it always says which of these is active.
+**Degradation ladder.** A provider unreachable → retry with backoff, then swap to the fallback provider for that stage. One model throttled → retry queue, then Luna. Over budget → summaries off, selection rules-only, digest templated. The dashboard always renders; it always says which of these is active.
 
 ---
 
@@ -610,7 +610,7 @@ angle (SpaceNews covers it), or stay flight-hardware focused?
 | Validation | zod (config + LLM outputs) | — |
 | HTTP / parsing | `fetch`/undici, `rss-parser`, `cheerio`, `pdf-parse` | Miniflux/FreshRSS as feed ingestion layer |
 | News backbone | Newsflash REST API (plain `fetch`, bearer key from `.env`; OpenAPI spec published upstream) | RSS-direct per lane if Newsflash degrades |
-| LLM access | Router via OpenAI-compatible API (Backboard.io), Vercel AI SDK optional | Direct provider SDKs (Google AI, OpenAI) |
+| LLM access | Two providers (Google AI Studio OpenAI-shim + Backboard threads API), Vercel AI SDK optional | Direct provider SDKs |
 | LLM models | Gemini 3.8 Flash (bulk, free tier) + GPT-5.6 Luna (interactive/fallback) | Gemini paid tier, larger GPT-5.6 tiers for hard judgment calls |
 | Embeddings | Optional; Gemini embedding free tier or local via Ollama | Voyage, OpenAI embeddings |
 | Scheduling | In-process scheduler + Windows Task Scheduler at login | Task Scheduler running the pipeline standalone |
@@ -646,7 +646,7 @@ detox/
    └─ experiments/          # decision records (see below)
 ```
 
-Secrets (API keys, OAuth client credentials, router key) live in a single gitignored `.env`, loaded by `core`. Nothing else in the repo reads them directly.
+Secrets (API keys, OAuth client credentials, provider keys) live in a single gitignored `.env`, loaded by `core`. Nothing else in the repo reads them directly.
 
 ---
 
@@ -656,7 +656,7 @@ Secrets (API keys, OAuth client credentials, router key) live in a single gitign
 
 **Phase 1 — Real data, rules only.** Weather (three sources + consensus), Reddit (official API), and one Newsflash news lane end to end through collect → normalize → dedupe (identity) → rule select → snapshot. *Exit: three lanes with real data and no LLM involved.*
 
-**Phase 2 — LLM layer.** Router client, batching queue, budget guard, selection and summarization stages, audit view, eval harness with a first gold set. *Exit: lanes curated to 3–5 strong items with rationales and a visible daily cost under $0.05.*
+**Phase 2 — LLM layer.** Provider clients, batching queue, per-provider budget guard, digest + taste stages, audit view, eval harness with a first gold set. *Exit: digest model-written with template fallback, taste scores measured against gold, Luna spend visible under $0.05 with Gemini usage against 30 RPD.*
 
 **Phase 3 — Remaining features.** Raptors + injuries, Spotify + releases, the Holdings lane with earnings, the remaining news lanes. *Exit: every lane in the style preview backed by real data.*
 

@@ -2,15 +2,23 @@
 
 ## Run it
 
+Double-click **`start-detox.bat`**. It checks the toolchain, installs
+dependencies if `node_modules` is missing, builds the dashboard, starts the
+daemon and opens http://127.0.0.1:4321. Ctrl+C stops it; running it again while
+the server is up just reopens the browser.
+
+By hand:
+
 ```powershell
 pnpm install
-pnpm start        # builds the dashboard, serves http://127.0.0.1:4321, arms the 09:00 scheduler
+pnpm build        # pnpm start only serves dist/, it does not build it
+pnpm start        # serves http://127.0.0.1:4321, arms the 09:00 scheduler
 ```
 
 Start at login (Windows Task Scheduler):
 
 ```powershell
-schtasks /create /tn Detox /tr "powershell -NoProfile -Command cd C:\path\to\detox; pnpm start" /sc onlogon
+schtasks /create /tn Detox /tr "powershell -NoProfile -Command cd C:\path\to\detox; pnpm build; pnpm start" /sc onlogon
 ```
 
 ## Where things live

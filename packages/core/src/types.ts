@@ -68,11 +68,19 @@ export interface SourceAdapter {
 }
 
 // §5.5 — LLM stage interface. Every stage runs off | rules-only | llm.
-export interface Budget {
+// Two backends, not one router (experiment 013): Gemini is gated on
+// REQUESTS ($0), Luna on DOLLARS ($0.05/day). Each pool carries both
+// counters; the guard reads the one that binds for that provider.
+export interface ProviderPool {
   dailyCapUsd: number;
   spentUsdToday: number;
   requestsToday: number;
   requestsPerDayCap: number;
+  rpm: number;
+}
+
+export interface Budget {
+  pools: Record<string, ProviderPool>;
 }
 
 export interface StageResult<O> {
@@ -219,8 +227,24 @@ export type Settings = z.infer<typeof SettingsSchema>;
 
 const StageConfigSchema = z.object({ model: z.string(), mode: LlmModeSchema });
 
-export const ModelsSchema = z.object({  router: z.object({ provider: z.string(), key_env: z.string() }).passthrough(),
+// Experiment 013: providers are first-class and pluggable (like adapters).
+// google-ai-studio = free bulk (request-gated); backboard = paid fallback
+// (dollar-gated). Adding a third provider is one config entry + one impl.
+const ProviderSchema = z.object({
+  base_url: z.string(),
+  key_env: z.string(),
+  transport: z.enum(["openai-shim", "backboard-threads"]),
+  rpm: z.number().default(60),
+  requests_per_day: z.number().default(1000),
+  llm_provider: z.string().optional(),
+}).passthrough();
+
+export const ModelsSchema = z.object({
+  providers: z.record(ProviderSchema),
   models: z.object({ bulk: z.string(), interactive: z.string() }).passthrough(),
+  model_providers: z
+    .object({ bulk: z.string(), interactive: z.string() })
+    .default({ bulk: "google-ai-studio", interactive: "backboard" }),
   stages: z.object({
     select: StageConfigSchema,
     summarize: StageConfigSchema,
@@ -311,7 +335,32 @@ export const SnapshotSchema = z.object({
     .optional()
     .default({}),
   lanes: z.record(z.unknown()),
-  cost: z.object({ usdToday: z.number(), capUsd: z.number(), degraded: z.boolean() }),
+  // Audit trail (§9.8): cut items with scores + reasons, capped per lane.
+  // Optional so Phase 0/1 snapshots still parse.
+  discarded: z
+    .record(
+      z.array(
+        z.object({
+          id: z.string(),
+          title: z.string(),
+          reason: z.string(),
+          ruleScore: z.number().nullable().optional(),
+        })
+      )
+    )
+    .optional(),
+  cost: z.object({
+    usdToday: z.number(),
+    capUsd: z.number(),
+    degraded: z.boolean(),
+    // Per-provider usage (§8, experiment 013). usdToday is the Luna/Backboard
+    // dollars; Gemini costs $0 so its pool reports requests against 30 RPD.
+    providers: z
+      .record(
+        z.object({ requestsToday: z.number(), requestsCap: z.number(), spentUsd: z.number() })
+      )
+      .optional(),
+  }),
 });
 export type Snapshot = z.infer<typeof SnapshotSchema>;
 
