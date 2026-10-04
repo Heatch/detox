@@ -47,24 +47,35 @@ export function createAdapters(config: LoadedConfig, dataDir: string): SourceAda
 
   const nf = sources.newsflash;
   const nfKey = nf?.key_env ? env[nf.key_env] : env.NEWSFLASH_API_KEY;
-  const techQuery = nf?.lanes?.tech ?? { category: "tech", min_sources: 2 };
+  // One adapter, one lane query per sources.yaml entry (§9.6). Spaceflight is
+  // deliberately NOT here — its own sources (experiment 007, Phase 3B).
+  const nfLaneEntries = Object.entries(nf?.lanes ?? { tech: { category: "tech", min_sources: 2 } });
+  const nfLaneIds = nfLaneEntries.map(([lane]) => lane).filter((lane) => lane !== "spaceflight");
   out.push({
     id: "news.newsflash",
-    lanes: ["tech"] as LaneId[],
-    collect: (ctx) =>
-      collectNewsflash(
-        ctx,
-        nf?.base ?? "https://newsflash.sh/api",
-        nfKey ?? "",
-        "tech",
-        techQuery,
-        {
-          relevance_floor: nf?.defaults?.relevance_floor,
-          langs: nf?.defaults?.langs,
-          min_sources: nf?.defaults?.min_sources,
-          window_hours: nf?.defaults?.window_hours,
-        }
-      ),
+    lanes: nfLaneIds as LaneId[],
+    collect: async (ctx) => {
+      const all: RawItem[] = [];
+      for (const [lane, query] of nfLaneEntries) {
+        if (lane === "spaceflight") continue;
+        all.push(
+          ...(await collectNewsflash(
+            ctx,
+            nf?.base ?? "https://newsflash.sh/api",
+            nfKey ?? "",
+            lane,
+            query as { category?: string; q?: string; semantic?: number; min_sources?: number; window_hours?: number },
+            {
+              relevance_floor: nf?.defaults?.relevance_floor,
+              langs: nf?.defaults?.langs,
+              min_sources: nf?.defaults?.min_sources,
+              window_hours: nf?.defaults?.window_hours,
+            }
+          ))
+        );
+      }
+      return all;
+    },
   });
 
   return out;

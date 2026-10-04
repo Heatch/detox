@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalizeUrl, normalizeTitle, ageString } from "../src/normalize.js";
+import { canonicalizeUrl, normalizeTitle, ageString, normalizeAll } from "../src/normalize.js";
 import { dedupe, scoreItems, selectTop } from "../src/select.js";
 import {
   buildParts,
@@ -49,6 +49,27 @@ describe("dedupe", () => {
     const { items, clusterSize } = dedupe([a, b, c, d]);
     expect(items.map((i) => i.id)).toEqual(["nf:1", "y"]);
     expect(clusterSize.get("nf:1")).toBe(3);
+  });
+  it("cross-lane dedupe: same event in two lane queries keeps one", () => {
+    const event = {
+      id: 42,
+      canonical_title: "Shared story",
+      summary: "Shared dek.",
+      first_seen_at: "2026-10-01T10:00:00Z",
+      url: "https://x.test/shared",
+      sources: [{ name: "Paper" }],
+      source_count: 2,
+    };
+    const raws = [
+      { adapter: "news.newsflash", fetchedAt: "2026-10-01T11:00:00Z", payload: { lane: "tech", event } },
+      { adapter: "news.newsflash", fetchedAt: "2026-10-01T11:00:00Z", payload: { lane: "science", event } },
+    ];
+    const normalized = normalizeAll(raws, "2026-10-01T11:00:00Z");
+    expect(normalized.map((i) => i.lane)).toEqual(["tech", "science"]);
+    const { items, clusterSize } = dedupe(normalized);
+    expect(items).toHaveLength(1);
+    expect(items[0].id).toBe("nf:42");
+    expect(clusterSize.get("nf:42")).toBe(2);
   });
 });
 

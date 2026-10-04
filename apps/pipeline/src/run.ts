@@ -101,6 +101,13 @@ export async function runPipeline(trigger: Trigger, root = defaultRoot()): Promi
       log: (msg: string) => console.log(`[run ${runId}] ${msg}`),
     };
 
+    // Newsflash lane registry for this run: every configured lane except
+    // spaceflight (own sources, §9.11). Drives error keys, selection, assembly.
+    const nfLaneList = Object.keys(config.sources.newsflash?.lanes ?? { tech: {} }).filter(
+      (l) => l !== "spaceflight"
+    );
+    const nfLanes = new Set(nfLaneList);
+
     // 1. collect — adapters run concurrently; per-adapter errors are captured,
     //    never thrown (a dead source degrades its lane, not the run).
     const adapters = createAdapters(config, dataDir);
@@ -123,7 +130,7 @@ export async function runPipeline(trigger: Trigger, root = defaultRoot()): Promi
           minute: "2-digit",
           timeZone: "America/Toronto",
         });
-        for (const key of laneKeysForAdapter(s.id, config.interests.reddit.subreddits)) {
+        for (const key of laneKeysForAdapter(s.id, config.interests.reddit.subreddits, nfLaneList)) {
           errors.push({ key, message: `${s.id} did not respond at ${at} (${s.error}).` });
         }
       }
@@ -169,8 +176,18 @@ export async function runPipeline(trigger: Trigger, root = defaultRoot()): Promi
 
     const weatherBlock = buildWeatherBlock(db, runId, rawByAdapter, config, nowMs);
 
-    // 3. dedupe (identity/lexical; LLM tie-break deferred)
-    const newsItems = items.filter((it) => it.lane === "tech" || it.lane.startsWith("reddit-"));
+    // 3. dedupe (identity/lexical; LLM tie-break deferred). Same-event ids
+    // across lane queries collapse free = cross-lane dedupe (§7, exp 001).
+    // News lanes cap at 7 days old (§9.6 open question, answered in exp 014):
+    // q-lanes query the full 30-day window for ranking, so anything older
+    // than a week is stale curation, not news. Reddit lanes keep their own
+    // time_window and skip this cap.
+    const MAX_NEWS_AGE_MS = 7 * 24 * 3600_000;
+    const freshEnough = (it: { publishedAt: string }): boolean =>
+      !(Date.parse(it.publishedAt) < nowMs - MAX_NEWS_AGE_MS);
+    const newsItems = items.filter(
+      (it) => (nfLanes.has(it.lane) && freshEnough(it)) || it.lane.startsWith("reddit-")
+    );
     const { items: deduped, clusterSize } = dedupe(newsItems);
 
     // 4. select (rules only) — per lane, budget [min,max], cuts kept w/ reasons
@@ -277,19 +294,35 @@ export async function runPipeline(trigger: Trigger, root = defaultRoot()): Promi
     };
     laneCounts["weather"] = { shown: weatherBlock.locations.length, collected: weatherBlock.fetched };
 
-    if (pickedByLane.has("tech")) {
-      const picked = pickedByLane.get("tech")!;
-      lanes["tech"] = {
-        title: "Tech",
-        items: picked.map((it) => ({
-          id: it.id,
-          title: it.title,
-          summary: it.dek ?? null,
-          meta: { outlet: it.outlet ?? "", age: ageString(it.publishedAt, nowMs) },
-          url: it.url,
-        })),
-      };
-      laneCounts["tech"] = { shown: picked.length, collected: collectedByLane.get("tech") ?? picked.length };
+    // Newsflash lanes assemble identically — headline + canonical summary +
+    // outlet/age, rules-only per experiment 001 (Phase 3A).
+    const NEWS_LANE_TITLES: Record<string, string> = {
+      tech: "Tech",
+      science: "Science",
+      math: "Math",
+      infrastructure: "Infrastructure",
+      "canada-gta": "Canada/GTA",
+    };
+    for (const lane of nfLaneList) {
+      const picked = pickedByLane.get(lane);
+      if (picked) {
+        lanes[lane] = {
+          title: NEWS_LANE_TITLES[lane] ?? lane,
+          items: picked.map((it) => ({
+            id: it.id,
+            title: it.title,
+            summary: it.dek ?? null,
+            meta: { outlet: it.outlet ?? "", age: ageString(it.publishedAt, nowMs) },
+            url: it.url,
+          })),
+        };
+        laneCounts[lane] = { shown: picked.length, collected: collectedByLane.get(lane) ?? picked.length };
+      } else {
+        // Live-but-empty (or errored) beats the stub scaffold: Stub Gazette
+        // content would read as real news. The error note still shows.
+        lanes[lane] = { title: NEWS_LANE_TITLES[lane] ?? lane, items: [] };
+        laneCounts[lane] = { shown: 0, collected: collectedByLane.get(lane) ?? 0 };
+      }
     }
 
     for (const [lane, picked] of pickedByLane) {
@@ -369,7 +402,7 @@ export async function runPipeline(trigger: Trigger, root = defaultRoot()): Promi
     snapshot.discarded = discarded;
     (snapshot as unknown as { laneStatus: Record<string, { ok: boolean; note: string | null }> }).laneStatus =
       Object.fromEntries(
-        [...new Set([...laneStatusKeys(), ...errors.map((e) => e.key)])].map((key) => {
+        [...new Set([...laneStatusKeys(nfLaneList), ...errors.map((e) => e.key)])].map((key) => {
           const err = errors.find((e) => e.key === key);
           return [key, err ? { ok: false, note: err.message } : { ok: true, note: null }];
         })
@@ -396,17 +429,17 @@ export async function runPipeline(trigger: Trigger, root = defaultRoot()): Promi
   }
 }
 
-function laneKeysForAdapter(adapterId: string, subs: string[]): string[] {
+function laneKeysForAdapter(adapterId: string, subs: string[], nfLanes: string[]): string[] {
   if (adapterId === "weather.envcan") return ["weather.envcan"];
   if (adapterId === "weather.openmeteo") return ["weather.openmeteo"];
   if (adapterId === "weather.metno") return ["weather.metno"];
-  if (adapterId === "news.newsflash") return ["tech"];
+  if (adapterId === "news.newsflash") return nfLanes;
   if (adapterId === "reddit.listings") return subs.map((s) => `reddit-${s}`);
   return [adapterId];
 }
 
-function laneStatusKeys(): string[] {
-  return ["weather.envcan", "weather.openmeteo", "weather.metno", "tech"];
+function laneStatusKeys(nfLanes: string[]): string[] {
+  return ["weather.envcan", "weather.openmeteo", "weather.metno", ...nfLanes];
 }
 
 interface WeatherLocationBlock {

@@ -13,6 +13,7 @@ interface LaneQuery {
   q?: string;
   semantic?: number;
   min_sources?: number;
+  window_hours?: number;
 }
 
 interface NewsflashEvent {
@@ -78,8 +79,13 @@ export async function collectNewsflash(
   if (query.q) params.set("q", query.q);
   if (query.semantic) params.set("semantic", String(query.semantic));
   params.set("min_sources", String(query.min_sources ?? defaults.min_sources ?? 2));
-  if (defaults.window_hours) {
-    params.set("from", new Date(Date.now() - defaults.window_hours * 3600_000).toISOString());
+  // Per-lane window override: q-lanes set window_hours: 0 to OMIT `from`
+  // entirely (experiment 014) — `from` collapses semantic ranking to
+  // recency, while the full 30-day window ranks well and the pipeline's
+  // 7-day age cap enforces freshness instead.
+  const windowHours = query.window_hours ?? defaults.window_hours;
+  if (windowHours) {
+    params.set("from", new Date(Date.now() - windowHours * 3600_000).toISOString());
   }
   const url = `${base}/events?${params}`;
   const auth = { Authorization: `Bearer ${apiKey}` };

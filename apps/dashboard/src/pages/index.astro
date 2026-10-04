@@ -104,8 +104,10 @@ function laneNote(id: string) {
 }
 
 // Layout (§9.9): masthead → digest → weather → two news columns + rail.
-const newsLeft = ["tech", "science"];
-const newsRight = ["holdings", "sports"];
+// Phase 3A: science/math/infrastructure/canada-gta join tech as live lanes;
+// holdings/sports stay stubbed until 3C/3B.
+const newsLeft = ["tech", "science", "math"];
+const newsRight = ["infrastructure", "canada-gta", "holdings", "sports"];
 const rail = ["releases", "reddit-nba", "reddit-uwaterloo"];
 const railReddit = ["reddit-nba", "reddit-torontoraptors", "reddit-uwaterloo"];
 const railRest = ["releases"];
