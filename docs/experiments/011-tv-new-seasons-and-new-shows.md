@@ -1,6 +1,6 @@
 # 011 — TV: new seasons from seen shows + LLM-scored new shows
 
-Status: validated 2026-09-30 (TMDB TV live; scoring design specified) | Revisit: 2027-01-01
+Status: decided 2026-10-04 (TMDB TV live; seasons + gated taste scoring implemented in 3D) | Revisit: 2027-01-01
 
 ## Question
 

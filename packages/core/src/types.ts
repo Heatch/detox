@@ -134,6 +134,7 @@ export const InterestsSchema = z.object({
       use_spotify_top_artists: z.boolean().default(true),
       top_n: z.number().default(25),
       time_range: z.string().default("short_term"),
+      blend_medium_term: z.boolean().default(true),
       artists: z.array(z.string()).default([]),
       show_reissues: z.boolean().default(true),
     })

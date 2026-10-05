@@ -190,6 +190,12 @@ const SOURCE_NAMES: Record<string, string> = { envcan: "Environment Canada", ope
     <div class="digest-controls">
       <div class="meta num">Selected {shownTotal} of {collectedTotal} items. {usageLine}</div>
       <button class="btn btn-primary" id="refresh-btn" type="button">Refresh</button>
+      {snap.runId != null && (
+        <span class="meta">Digest:
+          <button class="btn" id="fb-up" type="button" data-run={snap.runId} aria-label="Digest was useful">useful</button>
+          <button class="btn" id="fb-down" type="button" data-run={snap.runId} aria-label="Digest was not useful">not</button>
+        </span>
+      )}
     </div>
   </section>
 
@@ -423,6 +429,23 @@ const SOURCE_NAMES: Record<string, string> = { envcan: "Environment Canada", ope
       say("Still refreshing — check back shortly.");
     }
     if (btn) btn.addEventListener("click", refresh);
+    // Digest feedback (Phase 4 mechanism): one POST per click, button goes
+    // quiet afterwards. No state to manage — judgments accumulate in `feedback`.
+    for (const [id, value] of [["fb-up", 1], ["fb-down", -1]] as const) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      el.addEventListener("click", async () => {
+        const runId = Number((el as HTMLElement).dataset.run);
+        try {
+          await fetch("/api/feedback", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ run_id: runId, item_id: `digest:${runId}`, value }),
+          });
+          (el as HTMLElement).textContent = value === 1 ? "noted useful" : "noted not";
+        } catch { /* judgment lost — acceptable for a mechanism */ }
+      });
+    }
     if (first.stale) void refresh();
   })();
 </script>

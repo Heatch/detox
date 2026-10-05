@@ -29,22 +29,25 @@ interface SpotifyTokens {
 
 // In-process memo: the pipeline collects music + concerts concurrently, and
 // a token refresh rotates the refresh token — two simultaneous refreshes
-// would leave one caller holding dead tokens. Memoized per UTC day; failures
-// clear the memo so the next caller retries.
-let artistMemo: { day: string; promise: Promise<string[]> } | null = null;
+// would leave one caller holding dead tokens. Memoized per UTC day + opts;
+// failures clear the memo so the next caller retries.
+let artistMemo: { key: string; promise: Promise<string[]> } | null = null;
 
-/** Top-artist names, refreshing the stored tokens when expired. Writes the
- *  blended set to data/cache for the concerts adapter (race-free: the
- *  concerts side only ever reads it). */
+/** Top-artist names, refreshing the stored tokens when expired. Short-term
+ *  blended with medium-term when configured (experiment 002): catalog
+ *  artists the lane wants live in the medium window. Writes the blended
+ *  set to data/cache for the concerts adapter (race-free: the concerts
+ *  side only ever reads it). */
 export async function getSpotifyArtists(
   ctx: CollectContext,
   dataDir: string,
   clientId: string,
-  opts: { topN: number; timeRange: string; manual: string[] }
+  opts: { topN: number; timeRange: string; blendMediumTerm: boolean; manual: string[] }
 ): Promise<string[]> {
   const day = new Date().toISOString().slice(0, 10);
-  if (!artistMemo || artistMemo.day !== day) {
-    artistMemo = { day, promise: fetchSpotifyArtists(ctx, dataDir, clientId, opts) };
+  const key = `${day}|${opts.timeRange}|${opts.blendMediumTerm}|${opts.topN}`;
+  if (!artistMemo || artistMemo.key !== key) {
+    artistMemo = { key, promise: fetchSpotifyArtists(ctx, dataDir, clientId, opts) };
     artistMemo.promise.catch(() => {
       artistMemo = null;
     });
@@ -56,7 +59,7 @@ async function fetchSpotifyArtists(
   ctx: CollectContext,
   dataDir: string,
   clientId: string,
-  opts: { topN: number; timeRange: string; manual: string[] }
+  opts: { topN: number; timeRange: string; blendMediumTerm: boolean; manual: string[] }
 ): Promise<string[]> {
   const path = join(dataDir, TOKEN_FILE);
   if (!existsSync(path)) throw new Error(`no ${TOKEN_FILE} — run scripts/spotify_auth.py first`);
@@ -80,17 +83,26 @@ async function fetchSpotifyArtists(
     writeFileSync(path, JSON.stringify(tokens, null, 2));
     access = tokens.access_token;
   }
-  const top = (await fetchJson(
-    ID,
-    `https://api.spotify.com/v1/me/top/artists?time_range=${opts.timeRange}&limit=${opts.topN}`,
-    { headers: { Authorization: `Bearer ${access}` } }
-  )) as { items?: { name?: string }[] };
-  const names = (top.items ?? []).map((a) => a.name ?? "").filter(Boolean);
+  const ranges = opts.blendMediumTerm && opts.timeRange !== "medium_term"
+    ? [opts.timeRange, "medium_term"]
+    : [opts.timeRange];
+  const seen = new Map<string, string>();
+  for (const range of ranges) {
+    const top = (await fetchJson(
+      ID,
+      `https://api.spotify.com/v1/me/top/artists?time_range=${range}&limit=${opts.topN}`,
+      { headers: { Authorization: `Bearer ${access}` } }
+    )) as { items?: { id?: string; name?: string }[] };
+    for (const a of top.items ?? []) {
+      if (a.id && a.name && !seen.has(a.id)) seen.set(a.id, a.name);
+    }
+  }
+  const names = [...seen.values()];
   const blended = [...names];
   for (const m of opts.manual) {
     if (m && !blended.some((b) => b.toLowerCase() === m.toLowerCase())) blended.push(m);
   }
-  ctx.log(`${ID} artist set: ${names.length} Spotify + ${blended.length - names.length} manual`);
+  ctx.log(`${ID} artist set: ${names.length} Spotify (${ranges.join("+")}) + ${blended.length - names.length} manual`);
   mkdirSync(join(dataDir, "cache"), { recursive: true });
   writeFileSync(join(dataDir, ARTIST_CACHE_FILE), JSON.stringify({ at: new Date().toISOString(), artists: blended }));
   return blended;

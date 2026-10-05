@@ -1,6 +1,6 @@
 # 002 — Upcoming releases from my top 25 artists (and Toronto concerts)
 
-Status: setup in progress 2026-09-30 | Revisit: after first real OAuth run
+Status: decided 2026-10-04 (OAuth connected, artist blend implemented, MusicBrainz calendar live) | Revisit: 2027-01-01
 
 ## Question
 
@@ -163,5 +163,12 @@ Olivia Rodrigo (Oct 26–27), Doja Cat (Nov 25), Tyla (Nov 26).
       medium_term-only artist) had a Toronto concert the short_term list
       would have missed.
 - [x] Concerts: decided — Ticketmaster Discovery, experiment 003.
-- [ ] Decide: do concerts share the "Coming up" lane (tagged) or get their own
-      lane? (Style preview can show both variants cheaply.)
+- [x] Decide short_term vs blend (2026-10-04): **blend** — union of both
+      windows by Spotify id + manual supplement (`blend_medium_term: true`).
+      Deciding data: 19/25 overlap, and the 6 medium-only names are exactly
+      the catalog artists the reissue-friendly lane wants (Beatles, Maroon 5,
+      Elton John, Pussycat Dolls, Tate McRae). Tyla's concert (medium-only)
+      was the original evidence. One extra top-artists call per run.
+- [x] Decide: do concerts share the "Coming up" lane (tagged) or get their own
+      lane? Decided in Phase 3 planning: **own lane** (locked default),
+      implemented in 3D (experiment 017).

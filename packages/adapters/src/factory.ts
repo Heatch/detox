@@ -217,6 +217,7 @@ export function createAdapters(config: LoadedConfig, dataDir: string): SourceAda
             artists = await getSpotifyArtists(ctx, dataDir, env.SPOTIFY_CLIENT_ID ?? "", {
               topN: interests.music?.top_n ?? 25,
               timeRange: interests.music?.time_range ?? "short_term",
+              blendMediumTerm: interests.music?.blend_medium_term ?? true,
               manual: interests.music?.artists ?? [],
             });
           } catch {
@@ -269,6 +270,7 @@ export function createAdapters(config: LoadedConfig, dataDir: string): SourceAda
           artists = await getSpotifyArtists(ctx, dataDir, env.SPOTIFY_CLIENT_ID ?? "", {
             topN: interests.music?.top_n ?? 25,
             timeRange: interests.music?.time_range ?? "short_term",
+            blendMediumTerm: interests.music?.blend_medium_term ?? true,
             manual: interests.music?.artists ?? [],
           });
         } catch (err) {

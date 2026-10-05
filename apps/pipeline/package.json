@@ -8,6 +8,7 @@
   "scripts": {
     "run-pipeline": "tsx src/cli.ts run",
     "eval": "tsx src/eval.ts",
+    "weather:score": "tsx src/weather-score.ts",
     "dev": "tsx watch src/cli.ts run",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"

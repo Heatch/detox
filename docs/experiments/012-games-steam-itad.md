@@ -1,6 +1,6 @@
 # 012 — Games: Steam wishlist + ITAD sale prices
 
-Status: validated 2026-09-30 (wishlist chain keyless; ITAD awaits API key) | Revisit: on key arrival
+Status: decided 2026-10-04 (ITAD key verified end-to-end, universal-lowest live in the games lane) | Revisit: 2027-01-01
 
 ## Question
 

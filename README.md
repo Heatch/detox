@@ -1,4 +1,4 @@
-# Detox — local-first morning dashboard (Phase 0)
+# Detox — local-first morning dashboard (all phases complete; tuning per feature from here)
 
 ## Run it
 
@@ -24,13 +24,20 @@ schtasks /create /tn Detox /tr "powershell -NoProfile -Command cd C:\path\to\det
 ## Where things live
 
 - `config/` — interests, settings, sources, models (validated with zod at load).
-  `config/holdings.md` is yours and stays out of git.
+  Untracked in git: your portfolio, taste profile, and thresholds live here,
+  so back this directory up. Copy `.env.example` to `.env` for keys.
 - `apps/dashboard` — Astro app (`http://127.0.0.1:4321`), style tokens in
   `src/styles/tokens.css` (transcribed from `docs/style-guide.md`).
-- `apps/pipeline` — `runPipeline(trigger)` entry point, scheduler, stub stages.
+- `apps/pipeline` — `runPipeline(trigger)` entry point, scheduler, real
+  stages (collect → normalize → dedupe → select → digest/taste → assemble),
+  plus `pnpm eval` (gold-set harness) and `pnpm weather:score` (forecast
+  accuracy tracking).
 - `packages/core` — types, zod schemas, SQLite access, config loader.
-- `data/` — gitignored: `detox.db`, `snapshots/`, cache.
-- `docs/experiments/` — one decision record per source family (001–012).
+- `data/` — gitignored: `detox.db`, `snapshots/`, cache, Spotify tokens.
+- `docs/experiments/` — one decision record per source family and phase
+  milestone (001–018).
+- `scripts/` — setup tooling, not pipeline code (`spotify_auth.py` for the
+  one-time Spotify OAuth bootstrap).
 
 ## Refresh contract (§4 of the plan)
 

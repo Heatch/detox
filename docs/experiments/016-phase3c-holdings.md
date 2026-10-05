@@ -1,6 +1,6 @@
 # 016 — Phase 3C: Yahoo Holdings lane (news live, earnings throttled)
 
-Status: decided 2026-10-04 | Revisit: when crumb throttle clears; 2027-01-01
+Status: decided 2026-10-04 (earnings live via quote-page fallback; crumb path kept as preferred when unthrottled) | Revisit: 2027-01-01
 
 ## Question
 

@@ -214,7 +214,7 @@ Every stage declares its model, its schema, and its cost ceiling. Stages are ind
 
 ## 6. Data model (SQLite sketch)
 
-Draft schema; expect it to evolve. Migrations via Drizzle Kit or Kysely (either is fine — see stack table).
+Draft schema, evolved in place. Migrations are plain `CREATE TABLE IF NOT EXISTS` statements in `packages/core/src/db.ts` — no ORM (the Drizzle/Kysely option was never needed at this scale).
 
 | Table | Purpose |
 |---|---|
@@ -291,7 +291,7 @@ tiebreaks.
 
 ## 9. Features
 
-Each feature: what it shows, how it flows, candidate sources (open), experiments to run, and open questions. The word "candidate" is doing real work — nothing here is committed.
+Each feature: what it shows, how it flows, candidate sources (decided — see the experiment records), remaining tuning, and open questions.
 
 ### 9.1 Morning header and digest
 
@@ -356,7 +356,7 @@ The lane renders: day-part medians (temperature hero), precip/wind/humidity per 
 
 **Experiments.** Sources decided (experiment 009). Remaining: does ESPN's injury list carry game-day updates fast enough vs the official NBA PDF report (spot-check)? Do `broadcasts[]` fill in for regular season (TSN/Sportsnet on the game row)? Filter or show non-injury entries ("Coach's Decision", "Personal")?
 
-**Open questions.** Game-day promotion — should the team block rise on game days (now cheap: `status.detail` carries the time)? Should preseason games be hidden or just labeled?
+**Open questions.** Game-day promotion — should the team block rise on game days (now cheap: `status.detail` carries the time)? (Preseason decided: labeled rows, Phase 3B.)
 
 ### 9.4 Entertainment releases + Toronto concerts
 
@@ -393,7 +393,7 @@ Dead end recorded: `trending/tv/week` tracks viewing, not anticipation (0/20 una
 
 **Experiments.** All four sub-features decided (003, 004, 010, 011). Remaining: the artist-set blend (Tyla's concert is the one data point); bigness-fallback tuning for movies; TV threshold tuning (`popularity_min`, `confidence_min`) against the gold set; "coming up" as list vs calendar strip.
 
-**Open questions.** Do concerts belong in "Coming up" or their own lane? Do you want "out today" highlighted or is forward-looking enough? Soft 60-day window for watchlist hits ("in the next 60 days if possible" — extend to 75 for tier 1, or surface near-misses quietly)?
+**Open questions.** Do you want "out today" highlighted or is forward-looking enough? Soft 60-day window for watchlist hits ("in the next 60 days if possible" — extend to 75 for tier 1, or surface near-misses quietly)? (Concerts decided: own lane, Phase 3.)
 
 ### 9.5 Reddit (r/nba, r/torontoraptors, r/uwaterloo)
 
@@ -413,7 +413,7 @@ Dead end recorded: `trending/tv/week` tracks viewing, not anticipation (0/20 una
 
 **Experiments.** Retrieval is settled (experiment 005). Does summarizing top comments add value over the title alone? What's the smallest comment count where a thread deserves a summary? Per-subreddit score normalization if a combined lane view is ever wanted.
 
-**Open questions.** Should r/uwaterloo get its own lane or share a "Reddit" lane with subreddit tags? How are game threads handled — pinned in the Raptors section, hidden, or collapsed?
+**Open questions.** How are game threads handled — pinned in the Raptors section, hidden, or collapsed? (Lane layout decided: each subreddit renders its own lane.)
 
 ### 9.6 News lanes (tech, science, math, infrastructure, Canada/GTA)
 
@@ -454,7 +454,7 @@ cleaned up — the LLM summarize stage stays off for these lanes.
 |---|---|---|
 | Tech / dev | Hacker News (Algolia API), Lobsters | Dev-depth discussion; Newsflash skews to press releases and launches |
 | Science | EurekAlert | Press-release breadth |
-| Math | arXiv math RSS/API, Quanta math, AMS Notices | Newsflash corpus has effectively nothing here — RSS-owned lane |
+| Math | arXiv math RSS/API, Quanta math, AMS Notices | Newsflash corpus is thin — currently corroborated-only (`min_sources: 3`, experiment 014); RSS stays the depth fallback |
 | Infrastructure | The B1M, New Civil Engineer, Global Construction Review | Trade-press depth; named-project tracking ("Ontario Line") |
 | Canada / GTA | CBC, Star, Globe, BlogTO, Metrolinx/TTC notices | Hyperlocal GTA coverage Newsflash does not carry |
 
@@ -463,7 +463,7 @@ vs 3, relevance floor (samples suggest ~0.35–0.40), negative-filter lists for
 semantic drift (infrastructure matching AI/cloud/finance; tech product-launch
 noise). `from`-window semantics: active-in-window vs first-seen-in-window.
 
-**Open questions.** How old is too old for a lane item (24h hard cutoff, or recency decay)? Should the infrastructure lane alert on specific named projects from `interests.yaml`?
+**Open questions.** Should the infrastructure lane alert on specific named projects from `interests.yaml`? (Item age decided: 7-day cap on news lanes, experiment 014 — older than a week is stale curation, not news.)
 
 ### 9.7 Holdings and earnings (portfolio watch)
 
@@ -487,7 +487,7 @@ noise). `from`-window semantics: active-in-window vs first-seen-in-window.
 
 **Experiments.** Sources decided (experiment 008: fully Yahoo). Remaining: promo/opinion filter rules for the RSS feed (tune against the gold set); does Yahoo's `isEarningsDateEstimate` hold up vs. firm dates as they land; 30-day earnings horizon vs tighter; CDR display naming (underlying company vs "Costco CDR") in the UI density pass.
 
-**Open questions.** Position sizes and price tracking are deliberately out of scope — this is a news and earnings watch, not a portfolio tracker — unless that changes by request. Should the morning digest mention same-day earnings?
+**Open questions.** Position sizes and price tracking are deliberately out of scope — this is a news and earnings watch, not a portfolio tracker — unless that changes by request. (Digest earnings mentions: no — decided in experiment 016.)
 
 ### 9.8 Curation, dedupe, and the audit trail (cross-cutting)
 
@@ -593,7 +593,7 @@ angle (SpaceNews covers it), or stay flight-hardware focused?
 
 **Experiments.** Everything verified except the prices/v3 response shape (auth-gated). Remaining: historical-low flag behavior; how unreleased/no-price wishlist items render.
 
-**Open questions.** Vouchers — include or keep to clean prices? Show the full wishlist (not-on-sale) collapsed, or sale rows only?
+**Open questions.** None remaining — sale rows only, vouchers out, unreleased/no-price omitted (decided in experiment 017).
 
 ---
 
@@ -605,10 +605,10 @@ angle (SpaceNews covers it), or stay flight-hardware focused?
 | Dashboard | Astro in Node standalone mode, vanilla TS islands | SvelteKit, Next.js, templated static HTML |
 | Styling | Hand-authored CSS with custom properties from `style-guide.md` | Tailwind configured to the same tokens |
 | Fonts | Self-hosted via Fontsource: Newsreader + IBM Plex Sans | Fraunces + Public Sans, Literata + Golos Text |
-| Pipeline | TypeScript (`tsx`), same repo | Python for adapters that need `nba_api`/PRAW, called as a thin sidecar |
-| Database | SQLite via `better-sqlite3` | Drizzle ORM or Kysely for typed queries; DuckDB if analytics ever matter |
+| Pipeline | TypeScript (`tsx`), same repo | Python setup tooling only (`scripts/spotify_auth.py` OAuth bootstrap) |
+| Database | SQLite via `better-sqlite3`, plain `CREATE TABLE` migrations in `packages/core/src/db.ts` | Drizzle ORM or Kysely for typed queries; DuckDB if analytics ever matter |
 | Validation | zod (config + LLM outputs) | — |
-| HTTP / parsing | `fetch`/undici, `rss-parser`, `cheerio`, `pdf-parse` | Miniflux/FreshRSS as feed ingestion layer |
+| HTTP / parsing | `fetch`/undici, hand-rolled RSS/XML parsing | `rss-parser`, `cheerio` if parsing needs grow; Miniflux/FreshRSS as feed ingestion layer |
 | News backbone | Newsflash REST API (plain `fetch`, bearer key from `.env`; OpenAPI spec published upstream) | RSS-direct per lane if Newsflash degrades |
 | LLM access | Two providers (Google AI Studio OpenAI-shim + Backboard threads API), Vercel AI SDK optional | Direct provider SDKs |
 | LLM models | Gemini 3.8 Flash (bulk, free tier) + GPT-5.6 Luna (interactive/fallback) | Gemini paid tier, larger GPT-5.6 tiers for hard judgment calls |
@@ -650,17 +650,17 @@ Secrets (API keys, OAuth client credentials, provider keys) live in a single git
 
 ---
 
-## 12. Roadmap
+## 12. Roadmap (all phases complete as of 2026-10-04; tuning continues per feature)
 
-**Phase 0 — Skeleton and style.** Repo, workspaces, SQLite schema, config loading, the daemon with the three refresh triggers against a stub pipeline, Astro shell rendering a snapshot, and the `style-guide.md` system implemented as tokens and components with fake data. *Exit: open localhost, see the fake dashboard, watch the stale-refresh contract work against a stub.*
+**Phase 0 — Skeleton and style.** ✅ Done. Repo, workspaces, SQLite schema, config loading, the daemon with the three refresh triggers against a stub pipeline, Astro shell rendering a snapshot, and the `style-guide.md` system implemented as tokens and components with fake data. *Exit: open localhost, see the fake dashboard, watch the stale-refresh contract work against a stub.*
 
-**Phase 1 — Real data, rules only.** Weather (three sources + consensus), Reddit (official API), and one Newsflash news lane end to end through collect → normalize → dedupe (identity) → rule select → snapshot. *Exit: three lanes with real data and no LLM involved.*
+**Phase 1 — Real data, rules only.** ✅ Done. Weather (three sources + consensus), Reddit (official API), and one Newsflash news lane end to end through collect → normalize → dedupe (identity) → rule select → snapshot. *Exit: three lanes with real data and no LLM involved.*
 
-**Phase 2 — LLM layer.** Provider clients, batching queue, per-provider budget guard, digest + taste stages, audit view, eval harness with a first gold set. *Exit: digest model-written with template fallback, taste scores measured against gold, Luna spend visible under $0.05 with Gemini usage against 30 RPD.*
+**Phase 2 — LLM layer.** ✅ Done (experiment 013). Provider clients, batching queue, per-provider budget guard, digest + taste stages, audit view, eval harness with a first gold set. *Exit: digest model-written with template fallback, taste scores measured against gold, Luna spend visible under $0.05 with Gemini usage against 30 RPD.*
 
-**Phase 3 — Remaining features.** Raptors + injuries, Spotify + releases, the Holdings lane with earnings, the remaining news lanes. *Exit: every lane in the style preview backed by real data.*
+**Phase 3 — Remaining features.** ✅ Done (experiments 014–017). Raptors + injuries, Spotify + releases, the Holdings lane with earnings, the remaining news lanes. *Exit: every lane in the style preview backed by real data.*
 
-**Phase 4 — Experiments and personalization.** Per-feature source trials from §9 (news backbone already decided in experiment 001; remaining work is per-lane query tuning), weather accuracy tracking, tier-weight tuning, prompt iteration against the gold set, optional feedback capture. *Exit: `docs/experiments/` holds a decision record per feature with data behind it.*
+**Phase 4 — Experiments and personalization.** ✅ Mechanisms done (experiment 018): `pnpm weather:score` (consensus already winning everywhere on first data), `pnpm eval` gold-set harness, digest feedback capture, artist-blend decision. Per-feature tuning continues against these tools.
 
 ---
 
@@ -709,4 +709,4 @@ The eval harness (`pnpm eval`) provides the numbers for relevance and dedupe rec
 - **Scope creep toward kitchen sink.** The 3–5 item budget is a design constraint, not a default. If a lane feels thin, the fix is better selection or better sources, not more items.
 - **Earnings data quality.** Dates get moved (11 of 25 are Yahoo "estimated" dates right now), and micro-caps can carry stale history (HMM.A showed a 2010 row). The lane must label its source and as-of time, flag estimated dates, and cross-check before showing them.
 - ~~Ticker noise.~~ Largely resolved by experiment 008: Yahoo's per-symbol feeds carry no name-matching step, so word-collision problems (the "ALL"/"ARE" class) don't arise. Residual risk is promo/opinion content inside the per-symbol feed, handled by rule cuts before selection.
-- **Unresolved from the Q&A:** LLM stage set (summarize / dedupe / select / rank / explain) stays configurable per stage until the gold set says which earn their cost; digest paragraphs optional; push delivery deferred; concerts and other leagues out of scope for now.
+- **Unresolved from the Q&A:** LLM stage set (summarize / dedupe / select / rank / explain) stays configurable per stage until the gold set says which earn their cost; digest paragraphs optional; push delivery deferred.
