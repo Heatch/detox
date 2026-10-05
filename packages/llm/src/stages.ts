@@ -303,6 +303,7 @@ export type DigestOutput = z.infer<typeof DigestOutputSchema>;
 
 export interface DigestInput {
   weather?: string;
+  game?: string;
   urgent?: string;
   counts?: string;
 }
@@ -356,7 +357,7 @@ export async function runDigestStage(deps: {
     };
   }
   return {
-    text: templateDigest({ weather: deps.input.weather, urgent: deps.input.urgent }),
+    text: templateDigest({ weather: deps.input.weather, game: deps.input.game, urgent: deps.input.urgent }),
     generatedBy: "template",
     tokensIn: 0,
     tokensOut: 0,
@@ -388,7 +389,9 @@ export interface TasteScore {
 
 export const TasteOutputSchema = z.object({
   picks: z.array(
-    z.object({ id: z.string(), confidence: z.number().min(0).max(1), reason: z.string().min(1).max(140) })
+    // Reasons cap at 280 for the model (it ignores tighter caps); display
+    // truncates to 140 with an ellipsis (voice: one line).
+    z.object({ id: z.string(), confidence: z.number().min(0).max(1), reason: z.string().min(1).max(280) })
   ),
 });
 

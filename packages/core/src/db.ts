@@ -111,6 +111,19 @@ const MIGRATIONS: string[] = [
     ticker TEXT NOT NULL,
     payload_json TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS launches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER NOT NULL,
+    launch_id TEXT NOT NULL,
+    net TEXT NOT NULL,
+    payload_json TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS wishlist (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER NOT NULL,
+    appid INTEGER NOT NULL,
+    payload_json TEXT NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS llm_calls (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     run_id INTEGER NOT NULL,

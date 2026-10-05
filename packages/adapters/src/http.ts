@@ -56,6 +56,7 @@ async function pace(host: string, gapMs: number): Promise<void> {
 export function userAgentFor(adapterId: string): string | undefined {
   if (adapterId.startsWith("weather.metno")) return "DetoxDashboard/0.1 (local personal project)";
   if (adapterId.startsWith("reddit.")) return "DetoxDashboard/0.1 (personal morning dashboard)";
+  if (adapterId.startsWith("holdings.")) return "DetoxDashboard/0.1 (personal morning dashboard)";
   if (adapterId.startsWith("sports.espn")) return "curl/8.4.0";
   return undefined;
 }

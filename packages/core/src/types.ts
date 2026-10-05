@@ -13,8 +13,10 @@ export const LaneIdSchema = z.enum([
   "sports",
   "releases",
   "games",
+  "concerts",
   "reddit-nba",
   "reddit-uwaterloo",
+  "reddit-torontoraptors",
   "weather",
 ]);
 export type LaneId = z.infer<typeof LaneIdSchema>;
@@ -183,6 +185,14 @@ export const InterestsSchema = z.object({
     time_window: z.enum(["hour", "day", "week", "month", "year", "all"]).default("day"),
     exclude_title_patterns: z.array(z.string()).default([]),
   }),
+  spaceflight: z
+    .object({
+      news_sites: z.array(z.string()).default(["Spaceflight Now", "SpaceNews", "NASA", "Ars Technica"]),
+      search: z.array(z.string()).default([]),
+      top_n: z.number().default(25),
+      launches_limit: z.number().default(5),
+    })
+    .default({}),
   holdings: z.string(),
   weather: z.object({
     locations: z.array(
@@ -319,6 +329,24 @@ export const SourcesSchema = z
       .optional(),
     reddit: z
       .object({ key_env: z.string(), auth: z.string().optional(), sort: z.string().optional() })
+      .passthrough()
+      .optional(),
+    sports: z
+      .object({
+        base: z.string(),
+        user_agent: z.string().optional(),
+        upcoming_games: z.number().optional(),
+      })
+      .passthrough()
+      .optional(),
+    spaceflight: z
+      .object({
+        news: z.object({ base: z.string(), limit: z.number().optional() }).passthrough().optional(),
+        launches: z
+          .object({ base: z.string(), limit: z.number().optional() })
+          .passthrough()
+          .optional(),
+      })
       .passthrough()
       .optional(),
   })

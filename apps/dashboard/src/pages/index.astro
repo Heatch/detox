@@ -21,7 +21,20 @@ interface LaneItem {
   content?: string;
   comments?: Comment[];
   meta?: { outlet?: string; age?: string; score?: number; comments?: number };
+  tickers?: string[];
   url?: string;
+}
+
+interface HoldingEarning {
+  ticker: string;
+  company?: string;
+  currency?: string;
+  upcoming?: { date?: string; estimated?: boolean }[];
+  recent?: {
+    date?: string; epsActual?: number | null; epsEstimate?: number | null;
+    surprisePct?: number | null; revActual?: number | null; revEstimate?: number | null;
+  } | null;
+  thinData?: boolean;
 }
 
 interface WeatherLocation {
@@ -39,9 +52,51 @@ interface WeatherLocation {
   }[];
 }
 
+interface SportsGame {
+  date: string;
+  name: string;
+  detail?: string;
+  venue?: string;
+  city?: string;
+  preseason?: boolean;
+  broadcasts?: string[];
+}
+
+interface SportsInjury {
+  player: string;
+  status?: string;
+  note?: string;
+  returnDate?: string | null;
+  updatedAt?: string;
+}
+
+interface SportsTeam {
+  id: string;
+  name: string;
+  games?: SportsGame[];
+  injuries?: SportsInjury[];
+}
+
+interface LaunchRow {
+  id: string;
+  name: string;
+  netLocal?: string;
+  vehicle?: string;
+  mission?: string;
+  pad?: string;
+  location?: string;
+  provider?: string;
+  status?: string;
+  webcast?: boolean;
+  probability?: number | null;
+  url?: string;
+}
+
 interface LaneBlock {
   title?: string;
   items?: LaneItem[];
+  teams?: SportsTeam[];
+  launches?: LaunchRow[];
   context?: string;
   defaultLocation?: string;
   locations?: WeatherLocation[];
@@ -103,14 +158,14 @@ function laneNote(id: string) {
   return s && !s.ok ? s.note ?? "Source did not respond." : undefined;
 }
 
-// Layout (§9.9): masthead → digest → weather → two news columns + rail.
-// Phase 3A: science/math/infrastructure/canada-gta join tech as live lanes;
-// holdings/sports stay stubbed until 3C/3B.
+// Layout (§9.9): masthead → digest → weather → two news columns + rail,
+// then sports + launches sections, then footer.
+// Phase 3B: spaceflight joins the columns; sports/launches get own sections.
 const newsLeft = ["tech", "science", "math"];
-const newsRight = ["infrastructure", "canada-gta", "holdings", "sports"];
+const newsRight = ["infrastructure", "canada-gta", "spaceflight"];
 const rail = ["releases", "reddit-nba", "reddit-uwaterloo"];
 const railReddit = ["reddit-nba", "reddit-torontoraptors", "reddit-uwaterloo"];
-const railRest = ["releases"];
+const railRest = ["releases", "concerts", "games"];
 const SOURCE_NAMES: Record<string, string> = { envcan: "Environment Canada", openmeteo: "Open-Meteo", metno: "MET Norway" };
 ---
 <!DOCTYPE html>
@@ -236,6 +291,7 @@ const SOURCE_NAMES: Record<string, string> = { envcan: "Environment Canada", ope
     <div class="rail">
       {railRest.map((id) => (
         <Lane title={laneTitle(id, id)} context={laneContext(id)}>
+          {laneNote(id) && <p class="meta">{laneNote(id)}</p>}
           {laneItems(id).map((it) => (<Item title={it.title} summary={it.summary ?? undefined} meta={it.metaText} url={it.url} />))}
         </Lane>
       ))}
@@ -264,6 +320,64 @@ const SOURCE_NAMES: Record<string, string> = { envcan: "Environment Canada", ope
     </div>
   </div>
 
+  <section class="lane" aria-label="Sports">
+    <h2 class="lane-title">{laneTitle("sports", "Sports")}</h2>
+    {laneNote("sports") && <p class="lane-context meta">{laneNote("sports")}</p>}
+    {((lanes["sports"] as LaneBlock | undefined)?.teams ?? []).map((team) => (
+      <div>
+        <h3 class="item-title">{team.name}</h3>
+        {(team.games ?? []).length === 0 && <p class="meta">No upcoming games.</p>}
+        {(team.games ?? []).map((g) => (
+          <article>
+            <p class="item-summary">{g.name}{g.preseason ? " (preseason)" : ""}</p>
+            <p class="item-meta meta">{[g.detail, g.venue, g.city, (g.broadcasts ?? []).join(", ")].filter(Boolean).join(", ")}</p>
+          </article>
+        ))}
+        {(team.injuries ?? []).map((inj) => (
+          <article>
+            <p class="item-summary">{inj.player}{inj.status ? ` — ${inj.status}` : ""}</p>
+            <p class="item-meta meta">{[inj.note, inj.returnDate ? `return ${inj.returnDate}` : null].filter(Boolean).join(", ")}</p>
+          </article>
+        ))}
+      </div>
+    ))}
+  </section>
+
+  <section class="lane" aria-label="Launches">
+    <h2 class="lane-title">{laneTitle("launches", "Launches")}</h2>
+    {laneNote("launches") && <p class="lane-context meta">{laneNote("launches")}</p>}
+    {((lanes["launches"] as LaneBlock | undefined)?.launches ?? []).length === 0 && <p class="meta">No upcoming launches.</p>}
+    {((lanes["launches"] as LaneBlock | undefined)?.launches ?? []).map((l) => (
+      <article>
+        <h3 class="item-title">{l.url ? <a href={l.url}>{l.name}</a> : l.name}</h3>
+        <p class="item-meta meta">{[l.netLocal, l.vehicle, l.mission].filter(Boolean).join(", ")}</p>
+        <p class="item-meta meta">{[l.pad, l.location, l.provider, l.status, l.webcast ? "webcast" : null].filter(Boolean).join(", ")}</p>
+      </article>
+    ))}
+  </section>
+
+  <section class="lane" aria-label="Holdings">
+    <h2 class="lane-title">{laneTitle("holdings", "Holdings")}</h2>
+    {laneNote("holdings") && <p class="lane-context meta">{laneNote("holdings")}</p>}
+    {(((lanes["holdings"] as LaneBlock & { earnings?: HoldingEarning[] } | undefined)?.earnings) ?? []).map((e) => (
+      <article>
+        <h3 class="item-title">{e.ticker}{e.company ? ` — ${e.company}` : ""}</h3>
+        {(e.upcoming ?? []).map((u) => (
+          <p class="item-meta meta">Earnings {u.date}{u.estimated ? " (estimated)" : ""}{e.currency ? `, ${e.currency}` : ""}</p>
+        ))}
+        {e.recent && (
+          <p class="item-meta meta">
+            {`EPS ${e.recent.epsActual ?? "—"} vs ${e.recent.epsEstimate ?? "—"}`}{e.recent.surprisePct != null ? ` (${e.recent.surprisePct > 0 ? "+" : ""}${e.recent.surprisePct}%)` : ""}{e.currency ? `, ${e.currency}` : ""}
+          </p>
+        )}
+        {!e.recent && (e.upcoming ?? []).length === 0 && <p class="item-meta meta">{e.thinData ? "No recent results." : "Quiet."}</p>}
+      </article>
+    ))}
+    {(((lanes["holdings"] as LaneBlock | undefined)?.items) ?? []).map((it) => (
+      <Item title={it.title} summary={it.summary ?? undefined} meta={[(it.tickers ?? []).join(" "), it.meta?.outlet, it.meta?.age].filter(Boolean).join(", ")} url={it.url} />
+    ))}
+  </section>
+
   <footer class="footer">
     <p class="meta num">Selected {shownTotal} of {collectedTotal} items. {usageLine}{cost.degraded ? " Over budget — running rules-only." : ""}</p>
     {discardedLanes.length > 0 && (
@@ -279,7 +393,7 @@ const SOURCE_NAMES: Record<string, string> = { envcan: "Environment Canada", ope
         ))}
       </details>
     )}
-    <p class="meta">Live data. Reddit posts and comments shown in full, unedited.</p>
+    <p class="meta">Live data. Reddit posts and comments shown in full, unedited. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
   </footer>
 </div>
 

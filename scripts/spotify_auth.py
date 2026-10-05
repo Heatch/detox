@@ -31,6 +31,16 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV_PATH = os.path.join(REPO_ROOT, ".env")
 TOKEN_PATH = os.path.join(REPO_ROOT, "data", "spotify_tokens.json")
 
+# Windows Store Python ships without CA certificates, which breaks the TLS
+# handshake to accounts.spotify.com. Prefer certifi's bundle when installed
+# (pip install certifi); urllib picks it up via SSL_CERT_FILE.
+try:
+    import certifi
+
+    os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+except ImportError:
+    pass
+
 AUTH_URL = "https://accounts.spotify.com/authorize"
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 API_BASE = "https://api.spotify.com/v1"

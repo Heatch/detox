@@ -128,12 +128,74 @@ export function normalizeReddit(
   };
 }
 
+interface SpaceflightArticle {
+  id?: number;
+  title?: string;
+  url?: string;
+  news_site?: string;
+  summary?: string;
+  published_at?: string;
+}
+
+const SPACEFLIGHT_SPECIALISTS = new Set(["Spaceflight Now", "SpaceNews", "NASA", "Ars Technica"]);
+
+export function normalizeSpaceflight(raw: RawItem, nowIso: string): CanonicalItem | null {
+  const a = (raw.payload as { article?: SpaceflightArticle }).article;
+  if (!a || a.id == null) return null;
+  const url = a.url ?? "";
+  return {
+    id: `sfn:${a.id}`,
+    lane: "spaceflight",
+    sourceId: "spaceflight.news",
+    url,
+    canonicalUrl: url ? canonicalizeUrl(url) : "",
+    title: a.title ?? "(untitled)",
+    dek: a.summary ?? undefined,
+    publishedAt: a.published_at ?? nowIso,
+    fetchedAt: raw.fetchedAt,
+    outlet: a.news_site ?? "Spaceflight News",
+    tier: a.news_site && SPACEFLIGHT_SPECIALISTS.has(a.news_site) ? 1 : 2,
+    rawRef: 0,
+  };
+}
+
+export function normalizeYahooNews(raw: RawItem, nowIso: string): CanonicalItem | null {
+  const p = raw.payload as {
+    kind?: string;
+    holding?: { userTicker?: string; company?: string };
+    item?: { title?: string; link?: string; pubDate?: string; source?: string };
+  };
+  if (p.kind !== "news" || !p.item?.link || !p.item?.title) return null;
+  const url = p.item.link;
+  const pubMs = Date.parse(p.item.pubDate ?? "");
+  return {
+    id: canonicalItemId({ url }),
+    lane: "holdings",
+    sourceId: "holdings.yahoo",
+    url,
+    canonicalUrl: canonicalizeUrl(url),
+    title: p.item.title,
+    publishedAt: Number.isNaN(pubMs) ? nowIso : new Date(pubMs).toISOString(),
+    fetchedAt: raw.fetchedAt,
+    outlet: p.item.source || "Yahoo Finance",
+    tier: 2,
+    tickers: p.holding?.userTicker ? [p.holding.userTicker] : undefined,
+    rawRef: 0,
+  };
+}
+
 export function normalizeAll(raw: RawItem[], nowIso: string): CanonicalItem[] {
   const out: CanonicalItem[] = [];
   for (const r of raw) {
     if (r.adapter === "news.newsflash") {
       const lane = ((r.payload as { lane?: string }).lane ?? "tech") as LaneId;
       const item = normalizeNewsflash(r, lane, nowIso);
+      if (item) out.push(item);
+    } else if (r.adapter === "spaceflight.news") {
+      const item = normalizeSpaceflight(r, nowIso);
+      if (item) out.push(item);
+    } else if (r.adapter === "holdings.yahoo") {
+      const item = normalizeYahooNews(r, nowIso);
       if (item) out.push(item);
     } else if (r.adapter === "reddit.listings") {
       const sub = String((r.payload as { subreddit?: string }).subreddit ?? "unknown");

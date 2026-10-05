@@ -82,6 +82,11 @@ What only you can do (gaps to fill):
 - **"user not registered"** — step 2 is missing (Development Mode allowlist).
 - **Port 43210 already in use** — the script says so and stops; either free the
   port or set `SPOTIFY_REDIRECT_PORT` in `.env` and register that URI instead.
+- **SSL `CERTIFICATE_VERIFY_FAILED` on Windows Store Python** (hit
+  2026-10-04) — it ships without CA certificates, so the token exchange
+  fails even after a successful browser login. Fix: `pip install certifi`;
+  `scripts/spotify_auth.py` now prefers certifi's bundle via `SSL_CERT_FILE`
+  when importable (verified: handshake to accounts.spotify.com returns 200).
 
 ## Flow design (what the pipeline will do)
 
@@ -149,7 +154,9 @@ Olivia Rodrigo (Oct 26–27), Doja Cat (Nov 25), Tyla (Nov 26).
 ## Follow-ups
 
 - [ ] You: create the app, allowlist the account, set `SPOTIFY_CLIENT_ID`,
-      run `python scripts/spotify_auth.py`. (Done — connected 2026-09-30.)
+      run `python scripts/spotify_auth.py`. (Done — connected 2026-09-30;
+      re-connected 2026-10-04 after tokens were lost in the repo move.
+      First data point: short_term vs medium_term overlap 19 of 25.)
 - [ ] Coverage check: partially done — see experiment 004 for the Spotify vs
       MusicBrainz release-calendar probe (Spotify scan pending rate-limit
       lift). The blend question got its first real data point: Tyla (a

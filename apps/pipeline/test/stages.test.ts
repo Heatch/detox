@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalizeUrl, normalizeTitle, ageString, normalizeAll } from "../src/normalize.js";
+import { canonicalizeUrl, normalizeTitle, ageString, normalizeAll, normalizeSpaceflight, normalizeYahooNews } from "../src/normalize.js";
 import { dedupe, scoreItems, selectTop } from "../src/select.js";
 import {
   buildParts,
@@ -70,6 +70,52 @@ describe("dedupe", () => {
     expect(items).toHaveLength(1);
     expect(items[0].id).toBe("nf:42");
     expect(clusterSize.get("nf:42")).toBe(2);
+  });
+});
+
+describe("spaceflight normalize", () => {
+  it("maps articles to sfn: items with specialist tiers", () => {
+    const raw = (article: unknown) => ({ adapter: "spaceflight.news", fetchedAt: "2026-10-01T11:00:00Z", payload: { article } });
+    const nasa = normalizeSpaceflight(
+      raw({ id: 7, title: "Crew update", url: "https://x.test/a", news_site: "NASA", summary: "Dek here.", published_at: "2026-10-01T10:00:00Z" }) as never,
+      "2026-10-01T11:00:00Z"
+    )!;
+    expect(nasa.id).toBe("sfn:7");
+    expect(nasa.lane).toBe("spaceflight");
+    expect(nasa.dek).toBe("Dek here.");
+    expect(nasa.tier).toBe(1);
+    const blog = normalizeSpaceflight(
+      raw({ id: 8, title: "Rumor", url: "https://x.test/b", news_site: "Random Blog" }) as never,
+      "2026-10-01T11:00:00Z"
+    )!;
+    expect(blog.tier).toBe(2);
+    expect(normalizeSpaceflight(raw({ title: "no id" }) as never, "2026-10-01T11:00:00Z")).toBeNull();
+  });
+});
+
+describe("holdings normalize", () => {
+  it("maps yahoo news to ticker-tagged holdings items, skips non-news payloads", () => {
+    const news = normalizeYahooNews(
+      {
+        adapter: "holdings.yahoo",
+        fetchedAt: "2026-10-01T11:00:00Z",
+        payload: {
+          kind: "news",
+          holding: { userTicker: "TSX:DOL", company: "Dollarama" },
+          item: { title: "Beats estimates", link: "https://x.test/n1", pubDate: "Sat, 04 Oct 2026 12:00:00 GMT", source: "yahoo" },
+        },
+      } as never,
+      "2026-10-01T11:00:00Z"
+    )!;
+    expect(news.lane).toBe("holdings");
+    expect(news.tickers).toEqual(["TSX:DOL"]);
+    expect(news.outlet).toBe("yahoo");
+    expect(
+      normalizeYahooNews(
+        { adapter: "holdings.yahoo", fetchedAt: "", payload: { kind: "earnings" } } as never,
+        "2026-10-01T11:00:00Z"
+      )
+    ).toBeNull();
   });
 });
 
