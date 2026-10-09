@@ -21,6 +21,7 @@ A personal, local-first morning dashboard. A TypeScript pipeline collects news, 
 | `config/models.yaml` | LLM stages: model per stage, `off / rules-only / llm` modes, budget guard. |
 | `config/holdings.md` | Tickers for the Holdings lane. User-edited; read on every pipeline run. |
 | `docs/experiments/` | Decision records for every API, SDK, and model choice. |
+| `docs/backboard.md` | Backboard.io reference: not OpenAI-compatible, threads API contract, auth, pricing, failure rules — everything needed to redeploy it in another project. |
 
 ## Rules for working in this repo
 
